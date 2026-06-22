@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>接駁名單 · 司機</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f8fafc; }
+  #root { min-height: 100vh; }
+  .spin { width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: r 0.8s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;justify-content:center;align-items:center;height:100vh"><div class="spin"></div></div></div>
+
+<script type="module">
+import {
+  h, useState, useEffect, useMemo, createRoot, DOC, onSnapshot,
+  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
+  tk, EMPTY, buildGrid, NameList, dot, tabGroup, tabBtn
+} from "./app-core.js";
+
+function todayTab() { const d=new Date().getDay(); return (d===0||d===6)?"weekend":"weekday"; }
+
+function Driver() {
+  const [tab, setTab] = useState(todayTab());
+  const [cohortA, setCohortA] = useState("459A");
+  const [cohortB, setCohortB] = useState("459B");
+  const [data, setData] = useState({});
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(DOC, (snap)=>{
+      const v=snap.data();
+      if(v){ setData(v.data||{}); if(v.cohortA)setCohortA(v.cohortA); if(v.cohortB)setCohortB(v.cohortB); }
+      setLoaded(true);
+    }, (e)=>{console.error(e);setLoaded(true);});
+    return ()=>unsub();
+  }, []);
+
+  const cell=(k)=>data[k]||EMPTY();
+  const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
+  const grid = useMemo(()=>buildGrid(tab),[tab]);
+  const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
+  const todayDay = new Date().getDay();
+
+  if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
+
+  return h("div",{style:{fontFamily:"system-ui,sans-serif",maxWidth:780,margin:"0 auto",padding:16,color:"#1f2937"}},
+    h("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:14,flexWrap:"wrap"}},
+      h("h1",{style:{fontSize:20,fontWeight:800,margin:0}},"接駁名單 ",h("span",{style:{fontSize:13,color:"#6b7280",fontWeight:500}},"司機")),
+      h("div",{style:tabGroup},
+        h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日"),
+        h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日"),
+      ),
+      h("span",{style:{marginLeft:"auto",fontSize:12,color:"#059669"}},"● 即時"),
+    ),
+    days.map(day=>{
+      const isToday = day===todayDay;
+      // 收集這天所有班次
+      const slotRows = grid.map(row=>{
+        const dc = row.days.find(x=>x.day===day);
+        if(!dc || dc.routes.length===0) return null;
+        return { time: row.slot.time, label: row.slot.label, routes: dc.routes };
+      }).filter(Boolean);
+      if(slotRows.length===0) return null;
+      return h("div",{key:day,style:{marginBottom:18,border:isToday?"2px solid #2563eb":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
+        h("div",{style:{padding:"8px 12px",background:isToday?"#eff6ff":"#f8fafc",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",gap:8}},
+          "週"+DAY_NAME[day], isToday?h("span",{style:{fontSize:11,background:"#2563eb",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
+        slotRows.map(sr=>h("div",{key:sr.time,style:{padding:"8px 12px",borderTop:"1px solid #f1f5f9"}},
+          h("div",{style:{fontSize:13,fontWeight:700,color:"#475569",marginBottom:4}},sr.time+" ",h("span",{style:{fontWeight:400,color:"#9ca3af"}},sr.label)),
+          sr.routes.map(({route,time})=>{
+            const key=tk(route.id,day,time); const c=cell(key); const cnt=used(key);
+            return h("div",{key:route.id,style:{marginBottom:6,paddingLeft:8,borderLeft:`3px solid ${route.color}`}},
+              h("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                h("span",{style:{fontSize:13,fontWeight:700,color:route.color}},route.name),
+                h("span",{style:{fontSize:12,color:"#9ca3af",marginLeft:"auto"}},cnt+"人")),
+              cnt>0 ? h(NameList,{c,route,readOnly:true}) : h("div",{style:{fontSize:12,color:"#cbd5e1",padding:"2px 0"}},"（無人）"),
+            );
+          })
+        )),
+      );
+    }),
+    h("p",{style:{fontSize:12,color:"#9ca3af",marginTop:8}},"此頁即時更新，櫃台登記後自動出現。中和線標示上車站。"),
+  );
+}
+
+createRoot(document.getElementById("root")).render(h(Driver));
+</script>
+</body>
+</html>
