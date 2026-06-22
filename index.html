@@ -59,6 +59,7 @@ function Counter() {
   const [saving, setSaving] = useState(false);
   const [operator, setOperator] = useState(localStorage.getItem("op_name")||"");
   const [staff, setStaff] = useState([]);
+  const [showHelp, setShowHelp] = useState(localStorage.getItem("hide_help")!=="1");
 
   useEffect(() => {
     const unsub = onSnapshot(DOC, (snap)=>{
@@ -147,6 +148,7 @@ function Counter() {
     ),
 
     page==="log" ? h(LogPage) : h("div",null,
+      h(HelpBox,{showHelp,setShowHelp}),
       h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:14 } },
         h("div", { style:tabGroup },
           h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日 一～五"),
@@ -182,6 +184,28 @@ function Counter() {
       ),
       h("p",{style:{fontSize:12,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。異動紀錄保留 60 天。"),
     ),
+  );
+}
+
+function HelpBox({ showHelp, setShowHelp }){
+  function toggle(){ const v=!showHelp; setShowHelp(v); localStorage.setItem("hide_help", v?"0":"1"); }
+  const item=(t)=>h("li",{style:{marginBottom:4,lineHeight:1.6}},t);
+  return h("div",{style:{border:"1px solid #dbeafe",background:"#eff6ff",borderRadius:12,padding:showHelp?"12px 16px":"8px 16px",marginBottom:14}},
+    h("div",{style:{display:"flex",alignItems:"center"}},
+      h("span",{style:{fontWeight:800,fontSize:14,color:"#1e40af"}},"使用說明"),
+      h("button",{onClick:toggle,style:{marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:13,fontWeight:600}}, showHelp?"收合 ▲":"展開 ▼"),
+    ),
+    showHelp ? h("ul",{style:{margin:"8px 0 0",paddingLeft:20,fontSize:13,color:"#374151"}},
+      item("登記前請先在右上角「選擇操作者」，否則無法登記或修改，每筆異動都會記錄是誰操作。"),
+      item("每班共 10 個座位，由 A 梯、B 梯、補考 三組共用，互相扣抵；補考生只在還有空位時遞補。"),
+      item("點班次格子的「登記/名單」展開，先選 A／B／補考，再填姓名、電話、備註（可填首堂上課日）。"),
+      item("中和線有三個上車站（景安／永安／頂溪），登記時需選擇；公館線、忠孝復興線為單一上車點。"),
+      item("上方可切換「平日 一～五」與「假日 六日」；忠孝復興線僅週二、五、六、日有班。"),
+      item("換期時直接修改上方「本期梯次」A／B 名稱（例如 459A 改 460A），全表一起更新。"),
+      item("「清空 A 梯／B 梯」會清掉該梯全部乘客，需輸入清空密碼並確認，動作無法復原。"),
+      item("司機請改用司機專頁（driver.html）查看當天名單，該頁唯讀、會即時更新。"),
+      item("所有資料即時雲端同步，多台裝置同時開都會同步；右上角顯示「● 已同步」即表示儲存成功。"),
+    ) : null,
   );
 }
 
