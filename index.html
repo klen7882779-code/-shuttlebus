@@ -28,6 +28,7 @@ import {
 // ── 密碼（要改就改這兩行）────────────────────────────
 const COUNTER_PASSWORD = "22102270";   // 櫃台登記
 const ADMIN_PASSWORD   = "admin22102270"; // 異動紀錄頁（只有你）
+const CLEAR_PASSWORD   = "22101079";       // 清空梯次
 
 const ROUTE_NAME = Object.fromEntries(ROUTES.map(r=>[r.id,r.name]));
 function slotDesc(key){ // 把 trip key 還原成可讀描述
@@ -109,6 +110,23 @@ function Counter() {
     if(which==="A"){setCohortA(val);persist(null,val,null);}else{setCohortB(val);persist(null,null,val);}
     writeLog({ who:who(), act:"改梯次名", slot:`${which}梯`, name:`${old} → ${val}` });
   }
+  // 清空整個梯次（A 或 B），需管理密碼 + 二次確認
+  function clearSide(side){
+    if(!requireOp()) return;
+    const label = side==="A"?cohortA:cohortB;
+    const pw = prompt(`清空「${label}」全部乘客，請輸入清空密碼：`);
+    if(pw===null) return;
+    if(pw!==CLEAR_PASSWORD){ alert("清空密碼錯誤，未執行。"); return; }
+    // 統計人數
+    let total=0;
+    const next={};
+    for(const k in data){ const c=data[k]; total+=(c[side]||[]).length; next[k]={...c,[side]:[]}; }
+    if(total===0){ alert(`「${label}」目前沒有乘客，無需清空。`); return; }
+    if(!confirm(`確定清空「${label}」全部 ${total} 位乘客？此動作無法復原。`)) return;
+    setData(next); persist(next);
+    writeLog({ who:who(), act:"清空梯次", slot:`${label}`, name:`共 ${total} 位` });
+    alert(`已清空「${label}」${total} 位乘客。`);
+  }
 
   const grid = useMemo(()=>buildGrid(tab),[tab]);
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
@@ -138,6 +156,9 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),"A",h("input",{defaultValue:cohortA,onBlur:(e)=>saveCohort("A",e.target.value),style:cohortInput})),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),"B",h("input",{defaultValue:cohortB,onBlur:(e)=>saveCohort("B",e.target.value),style:cohortInput})),
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考"),
+        h("span",{style:{flex:1}}),
+        h("button",{onClick:()=>clearSide("A"),style:clearBtn},`清空 ${cohortA}`),
+        h("button",{onClick:()=>clearSide("B"),style:clearBtn},`清空 ${cohortB}`),
       ),
       h("div",{style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
         h("table",{style:{borderCollapse:"collapse",width:"100%",minWidth:760}},
@@ -277,6 +298,7 @@ function LogPage() {
 }
 
 const inS=(w)=>({width:w,padding:"5px 7px",borderRadius:6,border:"1px solid #d1d5db",fontSize:12});
+const clearBtn={padding:"4px 10px",borderRadius:6,border:"1px solid #fca5a5",background:"#fef2f2",color:"#dc2626",fontSize:12,fontWeight:600,cursor:"pointer"};
 const cohortInput={width:64,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13,fontWeight:600};
 const sideBtn=(a,color)=>({padding:"4px 10px",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,background:a?color:"#fff",color:a?"#fff":"#6b7280"});
 
