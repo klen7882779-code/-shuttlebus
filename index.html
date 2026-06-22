@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>接駁車週表 · 櫃台 · 第一駕訓班</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f1f5f9; }
+  #root { min-height: 100vh; }
+  .spin { width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: r 0.8s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .gate { max-width: 320px; margin: 16vh auto; padding: 28px; background:#fff; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,.08); font-family: system-ui,sans-serif; }
+  .gate input { width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:16px; margin:12px 0; }
+  .gate button { width:100%; padding:10px; border:none; border-radius:8px; background:#1f2937; color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;justify-content:center;align-items:center;height:100vh"><div class="spin"></div></div></div>
+
+<script type="module">
+import {
+  h, useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog,
+  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
+  tk, EMPTY, buildGrid, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
+} from "./app-core.js";
+
+// ── 密碼（要改就改這兩行）────────────────────────────
+const COUNTER_PASSWORD = "22102270";   // 櫃台登記
+const ADMIN_PASSWORD   = "admin22102270"; // 異動紀錄頁（只有你）
+
+const ROUTE_NAME = Object.fromEntries(ROUTES.map(r=>[r.id,r.name]));
+function slotDesc(key){ // 把 trip key 還原成可讀描述
+  const [rid,day,time]=key.split("_");
+  return `${ROUTE_NAME[rid]} 週${DAY_NAME[day]} ${time}`;
+}
+
+function Gate({ title, hint, pass, onPass }) {
+  const [v,setV]=useState(""); const [err,setErr]=useState(false);
+  function go(){ if(v===pass){ onPass(); } else setErr(true); }
+  return h("div",{className:"gate"},
+    h("div",{style:{fontSize:18,fontWeight:800,marginBottom:4}},title),
+    h("div",{style:{fontSize:13,color:"#6b7280"}},hint),
+    h("input",{type:"password",value:v,placeholder:"密碼",onChange:(e)=>{setV(e.target.value);setErr(false);},onKeyDown:(e)=>e.key==="Enter"&&go()}),
+    err?h("div",{style:{color:"#dc2626",fontSize:13,marginBottom:8}},"密碼錯誤"):null,
+    h("button",{onClick:go},"進入"),
+  );
+}
+
+function Counter() {
+  const [tab, setTab] = useState("weekday");
+  const [page, setPage] = useState("table"); // table | log
+  const [cohortA, setCohortA] = useState("459A");
+  const [cohortB, setCohortB] = useState("459B");
+  const [data, setData] = useState({});
+  const [openCell, setOpenCell] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [operator, setOperator] = useState(localStorage.getItem("op_name")||"");
+  const [staff, setStaff] = useState([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(DOC, (snap)=>{
+      const v=snap.data();
+      if(v){ setData(v.data||{}); if(v.cohortA)setCohortA(v.cohortA); if(v.cohortB)setCohortB(v.cohortB); setStaff(v.staff||[]); }
+      setLoaded(true);
+    }, (e)=>{console.error(e);setLoaded(true);});
+    return ()=>unsub();
+  }, []);
+
+  const who = () => operator.trim();
+  function requireOp(){
+    if(!who()){ alert("請先在右上角選擇操作者，才能登記或修改。"); return false; }
+    return true;
+  }
+
+  async function persist(nextData, nA, nB) {
+    setSaving(true);
+    try { await setDoc(DOC, { data: nextData ?? data, cohortA: nA ?? cohortA, cohortB: nB ?? cohortB, staff, updatedAt: Date.now() }); }
+    catch(e){ console.error(e); alert("儲存失敗，請檢查網路"); }
+    setSaving(false);
+  }
+  const cell=(k)=>data[k]||EMPTY();
+  const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
+  const left=(k)=>SEAT_CAP-used(k);
+
+  function addP(k,side,name,phone,stop,note){
+    if(!requireOp())return;
+    if(!name.trim()||left(k)<=0)return;
+    const c=data[k]||EMPTY();
+    const next={...data,[k]:{...c,[side]:[...c[side],{id:Date.now(),name:name.trim(),phone:phone.trim(),stop,note:(note||"").trim()}]}};
+    setData(next);persist(next);
+    writeLog({ who:who(), act:"新增", slot:slotDesc(k), side, name:name.trim() });
+  }
+  function removeP(k,side,id){
+    if(!requireOp())return;
+    const c=data[k]||EMPTY();
+    const target=c[side].find(x=>x.id===id);
+    const next={...data,[k]:{...c,[side]:c[side].filter(x=>x.id!==id)}};
+    setData(next);persist(next);
+    writeLog({ who:who(), act:"刪除", slot:slotDesc(k), side, name:target?target.name:"" });
+  }
+  function saveCohort(which,val){
+    const old = which==="A"?cohortA:cohortB;
+    if(val===old) return;
+    if(!requireOp()){ if(which==="A")setCohortA(old); else setCohortB(old); return; }
+    if(which==="A"){setCohortA(val);persist(null,val,null);}else{setCohortB(val);persist(null,null,val);}
+    writeLog({ who:who(), act:"改梯次名", slot:`${which}梯`, name:`${old} → ${val}` });
+  }
+
+  const grid = useMemo(()=>buildGrid(tab),[tab]);
+  const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
+  const labelOf=(s)=>s==="A"?cohortA:s==="B"?cohortB:"補考";
+
+  if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
+
+  return h("div", { style:{ fontFamily:"system-ui,sans-serif",maxWidth:1100,margin:"0 auto",padding:16,color:"#1f2937" } },
+    h("div", { style:{ display:"flex",alignItems:"center",gap:12,marginBottom:14,flexWrap:"wrap" } },
+      h("h1", { style:{ fontSize:22,fontWeight:800,margin:0 } }, "接駁車週表 ", h("span",{style:{fontSize:13,color:"#6b7280",fontWeight:500}},"櫃台")),
+      h("div", { style:tabGroup },
+        h("button",{onClick:()=>setPage("table"),style:tabBtn(page==="table")},"班表"),
+        h("button",{onClick:()=>setPage("log"),style:tabBtn(page==="log")},"異動紀錄"),
+      ),
+      // 操作者：從名單選，或選「其他」手打
+      h(OperatorPicker,{staff,operator,setOperator}),
+      h("span",{style:{fontSize:12,color:saving?"#d97706":"#059669"}}, saving?"儲存中…":"● 已同步"),
+    ),
+
+    page==="log" ? h(LogPage) : h("div",null,
+      h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:14 } },
+        h("div", { style:tabGroup },
+          h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日 一～五"),
+          h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
+        ),
+        h("span",{style:{color:"#6b7280",marginLeft:8}},"本期："),
+        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),"A",h("input",{defaultValue:cohortA,onBlur:(e)=>saveCohort("A",e.target.value),style:cohortInput})),
+        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),"B",h("input",{defaultValue:cohortB,onBlur:(e)=>saveCohort("B",e.target.value),style:cohortInput})),
+        h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考"),
+      ),
+      h("div",{style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
+        h("table",{style:{borderCollapse:"collapse",width:"100%",minWidth:760}},
+          h("thead",null,h("tr",null,h("th",{style:thTime},"時段"),days.map(day=>h("th",{key:day,style:thDay},"週"+DAY_NAME[day])))),
+          h("tbody",null,grid.map(row=>h("tr",{key:row.slot.time},
+            h("td",{style:tdTime},h("div",{style:{fontWeight:800,fontSize:15}},row.slot.time),h("div",{style:{fontSize:11,color:"#9ca3af"}},row.slot.label)),
+            row.days.map(dc=>h("td",{key:dc.day,style:tdCell},
+              dc.routes.length===0?h("span",{style:{color:"#d1d5db",fontSize:12}},"—"):null,
+              dc.routes.map(({route,time})=>{
+                const key=tk(route.id,dc.day,time); const c=cell(key); const lf=left(key); const isOpen=openCell===key;
+                return h("div",{key:route.id,style:{marginBottom:6,border:`1px solid ${route.color}33`,borderLeft:`3px solid ${route.color}`,borderRadius:8,padding:"6px 8px",background:"#fff"}},
+                  h("div",{style:{display:"flex",alignItems:"center",gap:6}},h("span",{style:{fontSize:12,fontWeight:700,color:route.color}},route.name),h("span",{style:{fontSize:11,color:lf<=0?"#dc2626":lf<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},"剩"+lf)),
+                  h("div",{style:{fontSize:11,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},h("span",{style:{color:SIDE_COLORS.A}},`${cohortA} ${c.A.length}`),h("span",{style:{color:SIDE_COLORS.B}},`${cohortB} ${c.B.length}`),h("span",{style:{color:SIDE_COLORS.R}},`補考 ${c.R.length}`)),
+                  h("button",{onClick:()=>setOpenCell(isOpen?null:key),style:{marginTop:4,width:"100%",fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
+                  isOpen?h(CellEditor,{cKey:key,c,route,lf,labelOf,addP,removeP}):null,
+                );
+              })
+            ))
+          ))),
+        ),
+      ),
+      h("p",{style:{fontSize:12,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。異動紀錄保留 60 天。"),
+    ),
+  );
+}
+
+function OperatorPicker({ staff, operator, setOperator }){
+  const inList = staff.includes(operator);
+  const [mode,setMode]=useState(operator && !inList ? "other" : "list");
+  function pick(v){
+    if(v==="__other__"){ setMode("other"); setOperator(""); localStorage.setItem("op_name",""); }
+    else { setMode("list"); setOperator(v); localStorage.setItem("op_name",v); }
+  }
+  const unset = !operator.trim();
+  return h("label",{style:{display:"flex",alignItems:"center",gap:4,fontSize:13,color:unset?"#dc2626":"#6b7280",marginLeft:"auto",fontWeight:unset?700:400}},unset?"⚠ 請選操作者":"操作者",
+    h("select",{value: mode==="other"?"__other__":operator, onChange:(e)=>pick(e.target.value),
+      style:{padding:"4px 6px",borderRadius:6,border:unset?"2px solid #dc2626":"1px solid #d1d5db",fontSize:13,background:unset?"#fef2f2":"#fff"}},
+      h("option",{value:"",disabled:true},"請選擇"),
+      staff.map(n=>h("option",{key:n,value:n},n)),
+      h("option",{value:"__other__"},"其他…"),
+    ),
+    mode==="other"?h("input",{value:operator,placeholder:"手打名字",autoFocus:true,
+      onChange:(e)=>{setOperator(e.target.value);localStorage.setItem("op_name",e.target.value);},
+      style:{width:72,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13}}):null,
+  );
+}
+
+function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP }) {
+  const [side,setSide]=useState("A"); const [name,setName]=useState(""); const [phone,setPhone]=useState(""); const [note,setNote]=useState("");
+  const stops=ROUTE_STOPS[route.id]; const [stop,setStop]=useState(stops?stops[0]:"");
+  function submit(){ addP(cKey,side,name,phone,stops?stop:undefined,note); setName("");setPhone("");setNote(""); }
+  return h("div",{style:{marginTop:6,background:"#fafafa",borderRadius:6,padding:6}},
+    h(NameList,{c,route,removeP,cKey}),
+    h("div",{style:{display:"flex",borderRadius:6,overflow:"hidden",border:"1px solid #d1d5db",marginTop:6,width:"fit-content"}},
+      h("button",{onClick:()=>setSide("A"),style:sideBtn(side==="A",SIDE_COLORS.A)},labelOf("A")),
+      h("button",{onClick:()=>setSide("B"),style:sideBtn(side==="B",SIDE_COLORS.B)},labelOf("B")),
+      h("button",{onClick:()=>setSide("R"),style:sideBtn(side==="R",SIDE_COLORS.R)},"補考"),
+    ),
+    h("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
+      h("input",{placeholder:"姓名",value:name,onChange:(e)=>setName(e.target.value),style:inS(60)}),
+      h("input",{placeholder:"電話",value:phone,onChange:(e)=>setPhone(e.target.value),style:inS(92)}),
+      h("input",{placeholder:"備註(首堂日…)",value:note,onChange:(e)=>setNote(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&submit(),style:inS(110)}),
+      stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"5px",borderRadius:6,border:"1px solid #d1d5db",fontSize:12,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
+      h("button",{onClick:submit,disabled:lf<=0,style:{padding:"5px 10px",borderRadius:6,border:"none",background:lf<=0?"#d1d5db":"#1f2937",color:"#fff",fontSize:12,fontWeight:600,cursor:lf<=0?"not-allowed":"pointer"}},lf<=0?"滿":"加"),
+    ),
+  );
+}
+
+// ── 管理頁（第二道密碼）：員工名單 + 異動紀錄 ──────────
+function LogPage() {
+  const [ok,setOk]=useState(false);
+  const [items,setItems]=useState(null);
+  const [staff,setStaff]=useState([]);
+  const [main,setMain]=useState(null); // 保留 main 其餘欄位以免覆寫
+  const [newName,setNewName]=useState("");
+
+  useEffect(()=>{
+    if(!ok)return;
+    const u1=onSnapshot(LOG,(snap)=>{
+      const v=snap.data();
+      setItems(v&&v.items?[...v.items].sort((a,b)=>b.t-a.t):[]);
+    },(e)=>{console.error(e);setItems([]);});
+    const u2=onSnapshot(DOC,(snap)=>{
+      const v=snap.data()||{};
+      setMain(v); setStaff(v.staff||[]);
+    },(e)=>{console.error(e);});
+    return ()=>{u1();u2();};
+  },[ok]);
+
+  async function saveStaff(list){
+    const base = main || {};
+    await setDoc(DOC, { ...base, staff: list, updatedAt: Date.now() });
+  }
+  function addStaff(){
+    const n=newName.trim();
+    if(!n || staff.includes(n)) { setNewName(""); return; }
+    const list=[...staff,n]; setStaff(list); saveStaff(list); setNewName("");
+  }
+  function delStaff(n){
+    const list=staff.filter(x=>x!==n); setStaff(list); saveStaff(list);
+  }
+
+  if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
+  if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
+
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","改梯次名":"#7c3aed" };
+  const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+
+  return h("div",null,
+    // 員工名單管理
+    h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"hidden",marginBottom:16}},
+      h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:14}},"員工名單"),
+      h("div",{style:{padding:"10px 14px",display:"flex",flexWrap:"wrap",gap:8,alignItems:"center"}},
+        staff.length===0?h("span",{style:{color:"#9ca3af",fontSize:13}},"尚無員工，請於下方新增"):null,
+        staff.map(n=>h("span",{key:n,style:{display:"inline-flex",alignItems:"center",gap:6,background:"#f1f5f9",borderRadius:8,padding:"4px 10px",fontSize:13,fontWeight:600}},
+          n, h("button",{onClick:()=>delStaff(n),style:{border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:13,padding:0}},"✕"))),
+      ),
+      h("div",{style:{padding:"0 14px 12px",display:"flex",gap:8}},
+        h("input",{value:newName,placeholder:"新增員工姓名",onChange:(e)=>setNewName(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&addStaff(),style:{flex:1,maxWidth:200,padding:"6px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13}}),
+        h("button",{onClick:addStaff,style:{padding:"6px 16px",borderRadius:8,border:"none",background:"#1f2937",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}},"新增"),
+      ),
+    ),
+    // 異動紀錄
+    h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"hidden"}},
+    h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:14,display:"flex",alignItems:"center"}},
+      "異動紀錄",h("span",{style:{marginLeft:"auto",fontSize:12,color:"#9ca3af",fontWeight:400}},`共 ${items.length} 筆 · 保留 60 天`)),
+    items.length===0?h("div",{style:{padding:24,textAlign:"center",color:"#9ca3af",fontSize:14}},"目前沒有紀錄"):
+    h("div",null, items.map((it,i)=>h("div",{key:i,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderBottom:"1px solid #f6f6f6",fontSize:13}},
+      h("span",{style:{color:"#9ca3af",minWidth:78,fontVariantNumeric:"tabular-nums"}},fmt(it.t)),
+      h("span",{style:{fontWeight:700,minWidth:48}},it.who||"—"),
+      h("span",{style:{color:ACT_COLOR[it.act]||"#374151",fontWeight:600,minWidth:60}},it.act),
+      h("span",{style:{color:"#6b7280"}},it.slot||""),
+      it.name?h("span",{style:{fontWeight:600,marginLeft:"auto"}},it.name):null,
+    ))),
+  ),
+  );
+}
+
+const inS=(w)=>({width:w,padding:"5px 7px",borderRadius:6,border:"1px solid #d1d5db",fontSize:12});
+const cohortInput={width:64,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13,fontWeight:600};
+const sideBtn=(a,color)=>({padding:"4px 10px",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,background:a?color:"#fff",color:a?"#fff":"#6b7280"});
+
+function Root(){
+  const [ok,setOk]=useState(sessionStorage.getItem("counter_ok")==="1");
+  if(!ok) return h(Gate,{title:"櫃台登入",hint:"請輸入櫃台密碼",pass:COUNTER_PASSWORD,onPass:()=>{sessionStorage.setItem("counter_ok","1");setOk(true);}});
+  return h(Counter);
+}
+createRoot(document.getElementById("root")).render(h(Root));
+</script>
+</body>
+</html>
