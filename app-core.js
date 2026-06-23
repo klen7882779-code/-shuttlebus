@@ -49,6 +49,11 @@ const WEEKDAY_SLOTS = [
   { time: "15:00", back: "18:00", label: "下午" },
   { time: "18:30", back: "21:00", label: "晚間" },
 ];
+// 暑期加開時段（三線比照各自原本出車日）
+const SUMMER_SLOTS = [
+  { time: "09:30", back: "12:30", label: "暑期加開", summer: true },
+  { time: "13:00", back: "16:00", label: "暑期加開", summer: true },
+];
 const WEEKDAY_ROUTE_DAYS = { gongguan: [1,2,4,5], zhongxiao: [2,5], zhonghe: [1,4] };
 const WEEKEND_SLOTS = {
   6: [{ time: "08:00", back: "12:30", label: "早上" }, { time: "13:00", back: "17:30", label: "下午" }],
@@ -65,10 +70,11 @@ export const DAY_NAME = { 0:"日",1:"一",2:"二",3:"三",4:"四",5:"五",6:"六
 export const tk = (r,d,t) => `${r}_${d}_${t}`;
 export const EMPTY = () => ({ A: [], B: [], R: [] });
 
-// 產生表格結構
-export function buildGrid(tab) {
+// 產生表格結構（summer=true 時平日加入暑期時段，依時間排序）
+export function buildGrid(tab, summer) {
   if (tab === "weekday") {
-    return WEEKDAY_SLOTS.map(slot => ({ slot, days: WEEKDAYS.map(day => {
+    const slots = summer ? [...WEEKDAY_SLOTS, ...SUMMER_SLOTS].sort((a,b)=>a.time.localeCompare(b.time)) : WEEKDAY_SLOTS;
+    return slots.map(slot => ({ slot, days: WEEKDAYS.map(day => {
       const routes = ROUTES.filter(r => WEEKDAY_ROUTE_DAYS[r.id].includes(day));
       return { day, routes: routes.map(r => ({ route: r, time: slot.time })) };
     })}));
