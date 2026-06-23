@@ -86,6 +86,75 @@ function Counter() {
     return ()=>unsub();
   }, []);
 
+  // 浮動表頭：原表頭捲出畫面頂端時，複製一條固定在最上方
+  useEffect(()=>{
+    let clone=null;
+    function sync(){
+      const thead=document.getElementById("mainThead");
+      const table=document.getElementById("mainTable");
+      const wrap=document.getElementById("tableWrap");
+      if(!thead||!table||!wrap){ if(clone){clone.remove();clone=null;} return; }
+      const rect=thead.getBoundingClientRect();
+      const wrapRect=wrap.getBoundingClientRect();
+      // 表頭捲到畫面頂以上，且表格還在畫面內 → 顯示浮動表頭
+      const shouldShow = rect.top < 0 && wrapRect.bottom > 40;
+      if(shouldShow){
+        if(!clone){
+          clone=document.createElement("div");
+          clone.style.position="fixed";
+          clone.style.top="0";
+          clone.style.zIndex="50";
+          clone.style.overflow="hidden";
+          clone.style.pointerEvents="none";
+          clone.style.boxShadow="0 2px 6px rgba(0,0,0,0.08)";
+          document.body.appendChild(clone);
+        }
+        // 對齊原表格位置與寬度，並跟隨橫向捲動
+        clone.style.left=wrapRect.left+"px";
+        clone.style.width=wrapRect.width+"px";
+        const tb=document.createElement("table");
+        tb.style.borderCollapse="separate";
+        tb.style.borderSpacing="0";
+        tb.style.width=table.offsetWidth+"px";
+        tb.style.tableLayout="fixed";
+        tb.style.marginLeft=(-wrap.scrollLeft)+"px";
+        const headTr=thead.querySelector("tr");
+        const newThead=document.createElement("thead");
+        const newTr=document.createElement("tr");
+        const origThs=headTr.querySelectorAll("th");
+        origThs.forEach(th=>{
+          const ntd=document.createElement("th");
+          ntd.style.width=th.offsetWidth+"px";
+          ntd.style.background="#f9fafb";
+          ntd.style.borderBottom="2px solid #e5e7eb";
+          ntd.style.padding="8px";
+          ntd.style.fontSize="14px";
+          ntd.style.fontWeight="700";
+          ntd.style.textAlign="center";
+          // 只取「週X」那行文字，不含按鈕
+          const dayDiv=th.querySelector("div");
+          ntd.textContent = dayDiv ? dayDiv.textContent : th.textContent;
+          newTr.appendChild(ntd);
+        });
+        newThead.appendChild(newTr);
+        tb.appendChild(newThead);
+        clone.innerHTML="";
+        clone.appendChild(tb);
+      } else if(clone){ clone.remove(); clone=null; }
+    }
+    window.addEventListener("scroll",sync,{passive:true});
+    window.addEventListener("resize",sync);
+    const wrap=document.getElementById("tableWrap");
+    if(wrap) wrap.addEventListener("scroll",sync,{passive:true});
+    sync();
+    return ()=>{
+      window.removeEventListener("scroll",sync);
+      window.removeEventListener("resize",sync);
+      if(wrap) wrap.removeEventListener("scroll",sync);
+      if(clone){clone.remove();clone=null;}
+    };
+  });
+
   const who = () => operator.trim();
   function requireOp(){
     if(!who()){ alert("請先在右上角選擇操作者，才能登記或修改。"); return false; }
@@ -437,11 +506,11 @@ function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,
       h("span",{style:{color:"#854d0e"}}, clip.mode==="day" ? "請點目標『那天的標題下方的貼到這天』" : "點某班的「貼到這班」，或點某天標題貼到整天對應班次"),
       h("button",{onClick:cancelCopy,style:{marginLeft:"auto",border:"none",background:"#854d0e",color:"#fff",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}},"取消複製"),
     ) : null,
-    h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"auto",maxHeight:"75vh"}},
-    h("table",{style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:760}},
-      h("thead",null,h("tr",null,
-        h("th",{style:{...thTime,position:"sticky",top:0,zIndex:7,background:"#f9fafb"}},"時段"),
-        days.map(day=>h("th",{key:day,style:{...thDay,position:"sticky",top:0,zIndex:6,background:"#f9fafb"}},
+    h("div",{id:"tableWrap",style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
+    h("table",{id:"mainTable",style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:760}},
+      h("thead",{id:"mainThead"},h("tr",null,
+        h("th",{style:{...thTime,background:"#f9fafb"}},"時段"),
+        days.map(day=>h("th",{key:day,style:{...thDay,background:"#f9fafb"}},
           h("div",null,"週"+DAY_NAME[day]),
           restDays[day] ? null : (copying
             ? h("button",{onClick:()=>pasteToDay(day),style:pasteDayBtn},"⬇貼到這天")
