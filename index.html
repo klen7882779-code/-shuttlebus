@@ -257,6 +257,7 @@ function Counter() {
 
   function startCopyCell(key){ setClip({ mode:"cell", table:curTable, key }); }
   function startCopyDay(day){ setClip({ mode:"day", table:curTable, day }); }
+  function startCopyPerson(key, side, person){ setClip({ mode:"person", table:curTable, key, side, person }); }
   function cancelCopy(){ setClip(null); }
 
   // 把一個 person 依目標路線調整站點後回傳新物件（跨線站點處理）
@@ -292,10 +293,11 @@ function Counter() {
     const destRouteId = destKey.split("_")[0];
     let srcCell, srcDesc;
     if(clip.mode==="cell"){ srcCell = srcData[clip.key]||EMPTY(); srcDesc=slotDesc(clip.key); }
+    else if(clip.mode==="person"){ srcCell = { A:[], B:[], R:[], [clip.side]:[clip.person] }; srcDesc=`${clip.person.name}`; }
     else { alert("整天複製請點目標『那一天的標題』貼上，不是貼到單一格。"); return; }
     const srcTotal = srcCell.A.length+srcCell.B.length+srcCell.R.length;
     if(srcTotal===0){ alert("來源沒有乘客。"); cancelCopy(); return; }
-    if(!confirm(`把「${srcDesc}」的 ${srcTotal} 位，複製到「${slotDesc(destKey)}」？\n（疊加，超過 ${SEAT_CAP} 位的會略過）`)) return;
+    if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？\n（疊加，超過 ${SEAT_CAP} 位的會略過）`)) return;
     const next = page==="prep" ? {...prep} : {...data};
     const { added, skipped } = mergeInto(next, destKey, srcCell, destRouteId);
     if(page==="prep"){ setPrep(next); persist({prep:next}); } else { setData(next); persist({data:next}); }
@@ -327,15 +329,18 @@ function Counter() {
       }
       writeLog({ who:who(), act:"複製整天", slot:`週${DAY_NAME[clip.day]} → 週${DAY_NAME[destDay]}`, name:`${classes}班 ${added}位${skipped?`（略過${skipped}）`:""}` });
     } else {
-      // 單班來源，貼到某天 → 貼到該天「同路線同時段」那班
+      // 單班/單人來源，貼到某天 → 該天「同路線同時段」那班
       const [r,,t]=clip.key.split("_");
       const destKey = tk(r,destDay,t);
-      const srcCell = srcData[clip.key]||EMPTY();
+      const srcCell = clip.mode==="person"
+        ? { A:[], B:[], R:[], [clip.side]:[clip.person] }
+        : (srcData[clip.key]||EMPTY());
+      const srcDesc = clip.mode==="person" ? clip.person.name : slotDesc(clip.key);
       const srcTotal=srcCell.A.length+srcCell.B.length+srcCell.R.length;
       if(srcTotal===0){ alert("來源沒有乘客。"); cancelCopy(); return; }
-      if(!confirm(`把「${slotDesc(clip.key)}」複製到「${slotDesc(destKey)}」？`)) return;
+      if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？`)) return;
       const res=mergeInto(next, destKey, srcCell, r); added=res.added; skipped=res.skipped;
-      writeLog({ who:who(), act:"複製", slot:`${slotDesc(clip.key)} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（略過${skipped}）`:""}` });
+      writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（略過${skipped}）`:""}` });
     }
     if(page==="prep"){ setPrep(next); persist({prep:next}); } else { setData(next); persist({data:next}); }
     cancelCopy();
@@ -380,7 +385,7 @@ function Counter() {
         labelA:prepNameA(), labelB:prepNameB(),
         prepMode:true, prepLeftFn:prepLeft,
         addP:addPrep, removeP:removePrep, editP:editPrep, labelOf:prepLabelOf,
-        clip, startCopyCell, startCopyDay, pasteToCell, pasteToDay, cancelCopy,
+        clip, startCopyCell, startCopyDay, startCopyPerson, pasteToCell, pasteToDay, cancelCopy,
       }),
     ) : h("div",null,
       h(HelpBox,{showHelp,setShowHelp}),
@@ -403,7 +408,7 @@ function Counter() {
         labelA:nameA(), labelB:nameB(),
         prepMode:false,
         addP,removeP,editP,labelOf,
-        clip, startCopyCell, startCopyDay, pasteToCell, pasteToDay, cancelCopy,
+        clip, startCopyCell, startCopyDay, startCopyPerson, pasteToCell, pasteToDay, cancelCopy,
       }),
       h("p",{style:{fontSize:12,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。升A／升B 會把預備該欄搬上車、舊欄封存，需升期密碼。"),
     ),
@@ -411,9 +416,9 @@ function Counter() {
 }
 
 // ── 週表元件（營運表與預備表共用）──
-function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,pasteToCell,pasteToDay,cancelCopy }){
+function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
   const copying = !!clip;
-  const srcLabel = clip ? (clip.mode==="day" ? `週${DAY_NAME[clip.day]} 整天` : "單一班次") : "";
+  const srcLabel = clip ? (clip.mode==="day" ? `週${DAY_NAME[clip.day]} 整天` : clip.mode==="person" ? clip.person.name : "單一班次") : "";
   return h("div",null,
     copying ? h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#fef9c3",border:"1px solid #fde047",borderRadius:10,padding:"8px 14px",marginBottom:10,fontSize:13,flexWrap:"wrap"}},
       h("span",{style:{fontWeight:700,color:"#854d0e"}},`📋 已複製「${srcLabel}」`),
@@ -462,7 +467,7 @@ function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,
                     h("button",{onClick:()=>setOpenCell(isOpen?null:key),style:{flex:1,fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
                     (c.A.length+c.B.length+c.R.length)>0 ? h("button",{onClick:()=>startCopyCell(key),title:"複製這班",style:{fontSize:11,padding:"3px 8px",borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600}},"複製") : null,
                   ),
-              isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,prepMode,pLeftA,pLeftB}):null,
+              isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson}):null,
             );
           })
         ))
@@ -532,14 +537,14 @@ function OperatorPicker({ staff, operator, setOperator }){
   );
 }
 
-function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMode, pLeftA, pLeftB }) {
+function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMode, pLeftA, pLeftB, onCopyPerson }) {
   const [side,setSide]=useState("A"); const [name,setName]=useState(""); const [phone,setPhone]=useState(""); const [note,setNote]=useState("");
   const stops=ROUTE_STOPS[route.id]; const [stop,setStop]=useState(stops?stops[0]:"");
   // 預備模式：該 side 的剩餘位；營運模式：整班剩餘位
   const sideLeft = prepMode ? (side==="A"?pLeftA:pLeftB) : lf;
   function submit(){ addP(cKey,side,name,phone,stops?stop:undefined,note); setName("");setPhone("");setNote(""); }
   return h("div",{style:{marginTop:6,background:"#fafafa",borderRadius:6,padding:6}},
-    h(NameList,{c,route,removeP,editP,cKey,hideR:prepMode}),
+    h(NameList,{c,route,removeP,editP,cKey,hideR:prepMode,onCopyPerson}),
     h("div",{style:{display:"flex",borderRadius:6,overflow:"hidden",border:"1px solid #d1d5db",marginTop:6,width:"fit-content"}},
       h("button",{onClick:()=>setSide("A"),style:sideBtn(side==="A",SIDE_COLORS.A)},labelOf("A")),
       h("button",{onClick:()=>setSide("B"),style:sideBtn(side==="B",SIDE_COLORS.B)},labelOf("B")),
