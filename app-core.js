@@ -112,9 +112,9 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson 
     const save=()=>{ if(!name.trim())return; editP(cKey,side,p.id,{name,phone,note,stop:stops?stop:undefined}); setEdit(false); };
     return h("div",{style:{display:"flex",alignItems:"center",gap:4,padding:"4px 0",flexWrap:"wrap"}},
       h("span",{style:{width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0}}),
-      h("input",{value:name,onChange:(e)=>setName(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&save(),style:{width:60,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
+      h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:60,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
       h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),style:{width:88,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
-      h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&save(),style:{width:80,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
+      h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),style:{width:80,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:11,padding:"3px 8px",fontWeight:600}},"存"),
       h("button",{onClick:()=>setEdit(false),style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:11}},"取消"),
