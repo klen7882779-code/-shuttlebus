@@ -278,8 +278,8 @@ function Counter() {
           h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
         ),
         h("span",{style:{color:"#6b7280",marginLeft:8}},"預備期數："),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h("input",{type:"number",defaultValue:prepNumA,onBlur:(e)=>setNum("PA",e.target.value),style:cohortInput}),"A"),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h("input",{type:"number",defaultValue:prepNumB,onBlur:(e)=>setNum("PB",e.target.value),style:cohortInput}),"B"),
+        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:prepNumA,onSave:(v)=>setNum("PA",v)}),"A"),
+        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:prepNumB,onSave:(v)=>setNum("PB",v)}),"B"),
       ),
       h(WeekTable,{
         grid,days,openCell,setOpenCell,
@@ -296,8 +296,8 @@ function Counter() {
           h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
         ),
         h("span",{style:{color:"#6b7280",marginLeft:8}},"本期："),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h("input",{type:"number",defaultValue:numA,onBlur:(e)=>setNum("A",e.target.value),style:cohortInput}),"A"),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h("input",{type:"number",defaultValue:numB,onBlur:(e)=>setNum("B",e.target.value),style:cohortInput}),"B"),
+        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:numA,onSave:(v)=>setNum("A",v)}),"A"),
+        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:numB,onSave:(v)=>setNum("B",v)}),"B"),
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考"),
         h("span",{style:{flex:1}}),
         h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
@@ -376,6 +376,19 @@ function HelpBox({ showHelp, setShowHelp }){
       item("所有資料即時雲端同步，多台裝置同時開都會同步；右上角顯示「● 已同步」即表示儲存成功。"),
     ) : null,
   );
+}
+
+function NumBox({ val, onSave }){
+  const [edit,setEdit]=useState(null); // null=顯示外部值；字串=編輯中
+  const shown = edit===null ? String(val) : edit;
+  return h("input",{
+    type:"number", value:shown,
+    onChange:(e)=>setEdit(e.target.value),
+    onFocus:(e)=>setEdit(String(val)),
+    onBlur:(e)=>{ const v=e.target.value; setEdit(null); if(v!==""&&parseInt(v,10)!==val) onSave(v); },
+    onKeyDown:(e)=>{ if(e.key==="Enter") e.target.blur(); },
+    style:cohortInput,
+  });
 }
 
 function OperatorPicker({ staff, operator, setOperator }){
