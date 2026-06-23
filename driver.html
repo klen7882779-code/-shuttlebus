@@ -32,6 +32,7 @@ const TAG_FG = { A:"#6d28d9", B:"#be185d", R:"#0e7490" };
 function Driver() {
   const [tab, setTab] = useState(todayTab());
   const [numA, setNumA] = useState(459);
+  const [summer, setSummer] = useState(false);
   const [numB, setNumB] = useState(458);
   const [data, setData] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -41,6 +42,7 @@ function Driver() {
       const v=snap.data();
       if(v){
         setData(v.data||{});
+        setSummer(!!v.summer);
         if(typeof v.numA==="number")setNumA(v.numA);
         if(typeof v.numB==="number")setNumB(v.numB);
       }
@@ -52,7 +54,7 @@ function Driver() {
   const labelOf=(s)=> s==="A"?`${numA}A` : s==="B"?`${numB}B` : "補考/機車";
   const cell=(k)=>data[k]||EMPTY();
   const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
-  const grid = useMemo(()=>buildGrid(tab),[tab]);
+  const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
   const todayDay = new Date().getDay();
 
@@ -76,14 +78,14 @@ function Driver() {
       const slotRows = grid.map(row=>{
         const dc = row.days.find(x=>x.day===day);
         if(!dc || dc.routes.length===0) return null;
-        return { time: row.slot.time, label: row.slot.label, routes: dc.routes };
+        return { time: row.slot.time, label: row.slot.label, summer: row.slot.summer, routes: dc.routes };
       }).filter(Boolean);
       if(slotRows.length===0) return null;
       return h("div",{key:day,style:{marginBottom:18,border:isToday?"2px solid #2563eb":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
         h("div",{style:{padding:"10px 14px",background:isToday?"#eff6ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
           "週"+DAY_NAME[day], isToday?h("span",{style:{fontSize:11,background:"#2563eb",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
-        slotRows.map(sr=>h("div",{key:sr.time,style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9"}},
-          h("div",{style:{fontSize:14,fontWeight:700,color:"#334155",marginBottom:6}},sr.time+" ",h("span",{style:{fontWeight:400,color:"#9ca3af",fontSize:12}},sr.label)),
+        slotRows.map(sr=>h("div",{key:sr.time,style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9",background:sr.summer?"#fff7ed":"transparent"}},
+          h("div",{style:{fontSize:14,fontWeight:700,color:sr.summer?"#c2410c":"#334155",marginBottom:6}},sr.time+" ",h("span",{style:{fontWeight:sr.summer?700:400,color:sr.summer?"#ea580c":"#9ca3af",fontSize:12}},sr.summer?"☀暑期加開":sr.label)),
           sr.routes.map(({route,time})=>{
             const key=tk(route.id,day,time); const c=cell(key); const cnt=used(key);
             return h("div",{key:route.id,style:{marginBottom:10,paddingLeft:10,borderLeft:`4px solid ${route.color}`}},
