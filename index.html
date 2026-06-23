@@ -65,6 +65,7 @@ function Counter() {
   const [operator, setOperator] = useState(localStorage.getItem("op_name")||"");
   const [staff, setStaff] = useState([]);
   const [showHelp, setShowHelp] = useState(localStorage.getItem("hide_help")!=="1");
+  const [summer, setSummer] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(DOC, (snap)=>{
@@ -72,6 +73,7 @@ function Counter() {
       if(v){
         setData(v.data||{});
         setPrep(v.prep||{});
+        setSummer(!!v.summer);
         if(typeof v.numA==="number")setNumA(v.numA);
         if(typeof v.numB==="number")setNumB(v.numB);
         if(typeof v.prepNumA==="number")setPrepNumA(v.prepNumA);
@@ -93,7 +95,7 @@ function Counter() {
   async function persist(patch) {
     setSaving(true);
     const payload = {
-      data, prep, numA, numB, prepNumA, prepNumB, archive, staff,
+      data, prep, numA, numB, prepNumA, prepNumB, archive, staff, summer,
       ...patch, updatedAt: Date.now(),
     };
     try { await setDoc(DOC, payload); }
@@ -347,7 +349,8 @@ function Counter() {
     alert(`已複製 ${added} 位${skipped?`，${skipped} 位因滿座略過`:""}。`);
   }
 
-  const grid = useMemo(()=>buildGrid(tab),[tab]);
+  const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
+  function toggleSummer(){ if(!requireOp())return; const v=!summer; setSummer(v); persist({summer:v}); writeLog({who:who(),act:"暑期模式",slot:tab==='weekday'?'平日':'假日',name:v?'開啟':'關閉'}); }
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
   const labelOf=(s)=>s==="A"?nameA():s==="B"?nameB():"補考/機車";
   const prepLabelOf=(s)=>s==="A"?prepNameA():s==="B"?prepNameB():"補考/機車";
@@ -378,6 +381,7 @@ function Counter() {
         h("span",{style:{color:"#6b7280",marginLeft:8}},"預備期數："),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:prepNumA,onSave:(v)=>setNum("PA",v)}),"A"),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:prepNumB,onSave:(v)=>setNum("PB",v)}),"B"),
+        tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
       ),
       h(WeekTable,{
         grid,days,openCell,setOpenCell,
@@ -398,6 +402,7 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:numA,onSave:(v)=>setNum("A",v)}),"A"),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:numB,onSave:(v)=>setNum("B",v)}),"B"),
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考/機車"),
+        tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
         h("span",{style:{flex:1}}),
         h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
         h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B → ${prepNameB()}`),
@@ -437,7 +442,9 @@ function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,
         )),
       )),
       h("tbody",null,grid.map(row=>h("tr",{key:row.slot.time},
-        h("td",{style:tdTime},h("div",{style:{fontWeight:800,fontSize:15}},row.slot.time),h("div",{style:{fontSize:11,color:"#9ca3af"}},row.slot.label)),
+        h("td",{style:row.slot.summer?{...tdTime,background:"#fff7ed"}:tdTime},
+          h("div",{style:{fontWeight:800,fontSize:15,color:row.slot.summer?"#c2410c":"#1f2937"}},row.slot.time),
+          h("div",{style:{fontSize:11,color:row.slot.summer?"#ea580c":"#9ca3af",fontWeight:row.slot.summer?700:400}},row.slot.summer?"☀暑期":row.slot.label)),
         row.days.map(dc=>h("td",{key:dc.day,style:tdCell},
           dc.routes.length===0?h("span",{style:{color:"#d1d5db",fontSize:12}},"—"):null,
           dc.routes.map(({route,time})=>{
@@ -496,6 +503,7 @@ function HelpBox({ showHelp, setShowHelp }){
       item("下期招生請到「新生預備班表」分頁登記，結構與班表相同，但不佔營運車位；每班可收人數＝10−升期後仍留車上的對向梯次人數，填滿即擋，避免升期爆位。"),
       item("該梯開課時，在班表頁按「升A／升B」，把預備該欄整批搬上車、舊欄封存退場，需輸入升期密碼。升期前系統會自動檢查各班是否超載，會爆的班先擋下來。"),
       item("複製名單：點某班的「複製」或某天標題的「複製這天」，再點目標的「貼到這班／貼到這天」。可單班、整天、跨路線複製，疊加且超過 10 位自動略過；跨路線時上車站會自動調整。"),
+      item("暑期加開：平日工具列按「☀暑期加開」，平日表會多出 09:30（→12:30回）與 13:00（→16:00回）兩個時段（三線比照原出車日），暑期結束點同一鈕關閉即收起，資料保留。"),
       item("司機請改用司機專頁（driver.html）查看當天名單，該頁唯讀、會即時更新。"),
       item("升期退場的舊名單會封存於「異動紀錄」頁（需管理密碼），保留 30 天可查詢。"),
       item("所有資料即時雲端同步，多台裝置同時開都會同步；右上角顯示「● 已同步」即表示儲存成功。"),
@@ -648,6 +656,8 @@ function LogPage() {
 const inS=(w)=>({width:w,padding:"5px 7px",borderRadius:6,border:"1px solid #d1d5db",fontSize:12});
 const copyDayBtn={marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:5,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600};
 const pasteDayBtn={marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:5,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700};
+const summerOffBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #fdba74",background:"#fff",color:"#c2410c",fontSize:12,fontWeight:700,cursor:"pointer"};
+const summerOnBtn={padding:"5px 12px",borderRadius:6,border:"none",background:"#f97316",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"};
 const promoteBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #93c5fd",background:"#eff6ff",color:"#1d4ed8",fontSize:12,fontWeight:700,cursor:"pointer"};
 const cohortInput={width:64,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13,fontWeight:600};
 const sideBtn=(a,color)=>({padding:"4px 10px",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,background:a?color:"#fff",color:a?"#fff":"#6b7280"});
