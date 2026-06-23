@@ -70,6 +70,16 @@ export const DAY_NAME = { 0:"日",1:"一",2:"二",3:"三",4:"四",5:"五",6:"六
 export const tk = (r,d,t) => `${r}_${d}_${t}`;
 export const EMPTY = () => ({ A: [], B: [], R: [] });
 
+// 電話格式化：手機(09開頭10碼純數字)→0912-345-678；其他原樣保留
+export function fmtPhone(v){
+  if(!v) return v;
+  const digits = v.replace(/\D/g,"");
+  if(digits.length===10 && digits.startsWith("09")){
+    return digits.slice(0,4)+"-"+digits.slice(4,7)+"-"+digits.slice(7);
+  }
+  return v; // 市話或不符手機格式 → 原樣
+}
+
 // 產生表格結構（summer=true 時平日加入暑期時段，依時間排序）
 export function buildGrid(tab, summer) {
   if (tab === "weekday") {
@@ -113,7 +123,7 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson 
     return h("div",{style:{display:"flex",alignItems:"center",gap:4,padding:"4px 0",flexWrap:"wrap"}},
       h("span",{style:{width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0}}),
       h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:60,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
-      h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),style:{width:88,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
+      h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:{width:88,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
       h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),style:{width:80,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:11,padding:"3px 8px",fontWeight:600}},"存"),
