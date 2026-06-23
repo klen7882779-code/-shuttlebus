@@ -139,5 +139,5 @@ export const tabGroup = { display:"flex",gap:4,background:"#f3f4f6",borderRadius
 export const tabBtn = (a) => ({ padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:a?"#fff":"transparent",color:a?"#1f2937":"#6b7280",boxShadow:a?"0 1px 3px rgba(0,0,0,0.1)":"none" });
 export const thTime = { padding:"10px 8px",background:"#f9fafb",borderBottom:"2px solid #e5e7eb",fontSize:12,color:"#6b7280",width:64,position:"sticky",left:0 };
 export const thDay = { padding:"10px 8px",background:"#f9fafb",borderBottom:"2px solid #e5e7eb",fontSize:14,fontWeight:700 };
-export const tdTime = { padding:"8px",borderBottom:"1px solid #f0f0f0",background:"#fafafa",textAlign:"center",verticalAlign:"top",position:"sticky",left:0 };
-export const tdCell = { padding:"6px",borderBottom:"1px solid #f0f0f0",borderLeft:"1px solid #f0f0f0",verticalAlign:"top",minWidth:130 };
+export const tdTime = { padding:"8px",borderBottom:"2px solid #cbd5e1",background:"#fafafa",textAlign:"center",verticalAlign:"top",position:"sticky",left:0 };
+export const tdCell = { padding:"6px",borderBottom:"2px solid #cbd5e1",borderLeft:"1px solid #f0f0f0",verticalAlign:"top",minWidth:130 };
