@@ -86,16 +86,16 @@ export function buildGrid(tab) {
 }
 
 // 名單列（共用）
-export function NameList({ c, route, readOnly, removeP, editP, cKey, hideR }) {
+export function NameList({ c, route, readOnly, removeP, editP, cKey, hideR, onCopyPerson }) {
   const stops = ROUTE_STOPS[route.id];
   return h("div", { style:{ marginTop:4 } },
-    c.A.map(p=>h(NameRow,{key:p.id,p,side:"A",stops,readOnly,removeP,editP,cKey})),
-    c.B.map(p=>h(NameRow,{key:p.id,p,side:"B",stops,readOnly,removeP,editP,cKey})),
-    hideR?null:c.R.map(p=>h(NameRow,{key:p.id,p,side:"R",stops,readOnly,removeP,editP,cKey})),
+    c.A.map(p=>h(NameRow,{key:p.id,p,side:"A",stops,readOnly,removeP,editP,cKey,onCopyPerson})),
+    c.B.map(p=>h(NameRow,{key:p.id,p,side:"B",stops,readOnly,removeP,editP,cKey,onCopyPerson})),
+    hideR?null:c.R.map(p=>h(NameRow,{key:p.id,p,side:"R",stops,readOnly,removeP,editP,cKey,onCopyPerson})),
   );
 }
 
-function NameRow({ p, side, stops, readOnly, removeP, editP, cKey }) {
+function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson }) {
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState(p.name);
   const [phone, setPhone] = useState(p.phone||"");
@@ -123,6 +123,7 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey }) {
     stops && p.stop ? h("span", { style:{ fontSize:11,color:"#475569",background:"#f1f5f9",borderRadius:4,padding:"0 5px" } }, p.stop) : null,
     p.note ? h("span", { style:{ fontSize:11,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px" } }, p.note) : null,
     !readOnly ? h("button", { onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setEdit(true);}, style:{ marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:12 } }, "改") : null,
+    !readOnly && onCopyPerson ? h("button", { onClick:()=>onCopyPerson(cKey,side,p), style:{ border:"none",background:"none",color:"#d97706",cursor:"pointer",fontSize:12 } }, "複製到") : null,
     !readOnly ? h("button", { onClick:()=>removeP(cKey,side,p.id), style:{ border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:12 } }, "✕") : null,
   );
 }
