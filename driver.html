@@ -49,7 +49,7 @@ function Driver() {
     return ()=>unsub();
   }, []);
 
-  const labelOf=(s)=> s==="A"?`${numA}A` : s==="B"?`${numB}B` : "補考";
+  const labelOf=(s)=> s==="A"?`${numA}A` : s==="B"?`${numB}B` : "補考/機車";
   const cell=(k)=>data[k]||EMPTY();
   const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
   const grid = useMemo(()=>buildGrid(tab),[tab]);
@@ -69,7 +69,7 @@ function Driver() {
     ),
     // 當期梯次圖例
     h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14,fontSize:12}},
-      tag("A",`${numA}A`), tag("B",`${numB}B`), tag("R","補考"),
+      tag("A",`${numA}A`), tag("B",`${numB}B`), tag("R","補考/機車"),
     ),
     days.map(day=>{
       const isToday = day===todayDay;
@@ -93,7 +93,7 @@ function Driver() {
                 h("span",{style:{marginLeft:"auto",display:"flex",gap:6,fontSize:12}},
                   countChip("A",labelOf("A"),c.A.length),
                   countChip("B",labelOf("B"),c.B.length),
-                  c.R.length>0?countChip("R","補考",c.R.length):null,
+                  c.R.length>0?countChip("R","補考/機車",c.R.length):null,
                   h("span",{style:{fontWeight:700,color:"#334155"}},`共${cnt}`),
                 ),
               ),
@@ -101,7 +101,7 @@ function Driver() {
                 ? h("div",null,
                     c.A.map(p=>personRow(p,"A",route,labelOf("A"))),
                     c.B.map(p=>personRow(p,"B",route,labelOf("B"))),
-                    c.R.map(p=>personRow(p,"R",route,"補考")),
+                    c.R.map(p=>personRow(p,"R",route,"補考/機車")),
                   )
                 : h("div",{style:{fontSize:13,color:"#cbd5e1",padding:"4px 0"}},"（無人）"),
             );
