@@ -251,8 +251,8 @@ function Counter() {
 
   const grid = useMemo(()=>buildGrid(tab),[tab]);
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
-  const labelOf=(s)=>s==="A"?nameA():s==="B"?nameB():"補考";
-  const prepLabelOf=(s)=>s==="A"?prepNameA():s==="B"?prepNameB():"補考";
+  const labelOf=(s)=>s==="A"?nameA():s==="B"?nameB():"補考/機車";
+  const prepLabelOf=(s)=>s==="A"?prepNameA():s==="B"?prepNameB():"補考/機車";
 
   if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
 
@@ -298,7 +298,7 @@ function Counter() {
         h("span",{style:{color:"#6b7280",marginLeft:8}},"本期："),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:numA,onSave:(v)=>setNum("A",v)}),"A"),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:numB,onSave:(v)=>setNum("B",v)}),"B"),
-        h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考"),
+        h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考/機車"),
         h("span",{style:{flex:1}}),
         h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
         h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B → ${prepNameB()}`),
@@ -341,7 +341,7 @@ function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,
               h("div",{style:{fontSize:11,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},
                 h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}`),
                 h("span",{style:{color:SIDE_COLORS.B}},`${labelB} ${c.B.length}`),
-                prepMode?null:h("span",{style:{color:SIDE_COLORS.R}},`補考 ${c.R.length}`),
+                prepMode?null:h("span",{style:{color:SIDE_COLORS.R}},`補考/機車 ${c.R.length}`),
               ),
               h("button",{onClick:()=>setOpenCell(isOpen?null:key),style:{marginTop:4,width:"100%",fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
               isOpen?h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,prepMode,pLeftA,pLeftB}):null,
@@ -363,8 +363,8 @@ function HelpBox({ showHelp, setShowHelp }){
     ),
     showHelp ? h("ul",{style:{margin:"8px 0 0",paddingLeft:20,fontSize:13,color:"#374151"}},
       item("登記前請先在右上角「選擇操作者」，否則無法登記或修改，每筆異動都會記錄是誰操作。"),
-      item("每班共 10 個座位，由 A 梯、B 梯、補考 三組共用，互相扣抵；補考生只在還有空位時遞補。"),
-      item("點班次格子的「登記/名單」展開，先選 A／B／補考，再填姓名、電話、備註（可填首堂上課日）。"),
+      item("每班共 10 個座位，由 A 梯、B 梯、補考/機車 三組共用，互相扣抵；補考/機車生只在還有空位時遞補。"),
+      item("點班次格子的「登記/名單」展開，先選 A／B／補考機車，再填姓名、電話、備註（可填首堂上課日）。"),
       item("中和線有三個上車站（景安／永安／頂溪），登記時需選擇；公館線、忠孝復興線為單一上車點。"),
       item("上方可切換「平日 一～五」與「假日 六日」；忠孝復興線僅週二、五、六、日有班。"),
       item("正式換期請用升期功能（見下）；上方 A／B 的數字框僅供臨時手動微調期數，平常不需動。"),
@@ -423,7 +423,7 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
     h("div",{style:{display:"flex",borderRadius:6,overflow:"hidden",border:"1px solid #d1d5db",marginTop:6,width:"fit-content"}},
       h("button",{onClick:()=>setSide("A"),style:sideBtn(side==="A",SIDE_COLORS.A)},labelOf("A")),
       h("button",{onClick:()=>setSide("B"),style:sideBtn(side==="B",SIDE_COLORS.B)},labelOf("B")),
-      prepMode?null:h("button",{onClick:()=>setSide("R"),style:sideBtn(side==="R",SIDE_COLORS.R)},"補考"),
+      prepMode?null:h("button",{onClick:()=>setSide("R"),style:sideBtn(side==="R",SIDE_COLORS.R)},"補考/機車"),
     ),
     prepMode?h("div",{style:{fontSize:11,color:sideLeft<=0?"#dc2626":"#6b7280",marginTop:4}},`${labelOf(side)} 這班還可收 ${sideLeft} 位`):null,
     h("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
