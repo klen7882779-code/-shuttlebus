@@ -322,6 +322,15 @@ function Counter() {
   // 手動微調期數（萬一要修），不搬人只改數字
   function setNum(which, val){
     const n=parseInt(val,10); if(isNaN(n)) return;
+    const cur = which==="A"?numA : which==="B"?numB : which==="PA"?prepNumA : prepNumB;
+    if(n===cur) return; // 沒變不問
+    const label = which==="A"?"正式A" : which==="B"?"正式B" : which==="PA"?"預備A" : "預備B";
+    if(!confirm(`確定把「${label}」期數從 ${cur} 改成 ${n} 嗎？\n（這會改變整欄梯次名稱）`)){
+      // 取消：強制重繪回原值
+      if(which==="A"){ setNumA(numA); } else if(which==="B"){ setNumB(numB); }
+      else if(which==="PA"){ setPrepNumA(prepNumA); } else { setPrepNumB(prepNumB); }
+      return;
+    }
     if(which==="A"){ setNumA(n); persist({numA:n}); }
     else if(which==="B"){ setNumB(n); persist({numB:n}); }
     else if(which==="PA"){ setPrepNumA(n); persist({prepNumA:n}); }
