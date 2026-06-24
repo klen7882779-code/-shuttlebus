@@ -422,6 +422,56 @@ function Counter() {
 
   const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
   function toggleSummer(){ if(!requireOp())return; const v=!summer; setSummer(v); persist({summer:v}); writeLog({who:who(),act:"暑期模式",slot:tab==='weekday'?'平日':'假日',name:v?'開啟':'關閉'}); }
+  function printWeek(){
+    const esc=(t)=>String(t==null?"":t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    const labelName=(s)=> s==="A"?(numA+"A") : s==="B"?(numB+"B") : "補考/機車";
+    const ROUTE_NM={gongguan:"公館線",zhongxiao:"忠孝復興線",zhonghe:"中和線"};
+    const allDays=[1,2,3,4,5,6,0];
+    let pages="";
+    for(const day of allDays){
+      const dTab=(day===0||day===6)?"weekend":"weekday";
+      const g=buildGrid(dTab, summer);
+      const rows=[];
+      for(const row of g){
+        const dc=row.days.find(x=>x.day===day);
+        if(!dc||dc.routes.length===0) continue;
+        rows.push({time:row.slot.time, summer:row.slot.summer, routes:dc.routes});
+      }
+      if(rows.length===0) continue;
+      let body="";
+      for(const r of rows){
+        for(const rt of r.routes){
+          const route=rt.route, time=rt.time;
+          const key=tk(route.id,day,time);
+          const c=data[key]||EMPTY();
+          const people=[].concat(c.A.map(p=>Object.assign({},p,{_s:"A"})),c.B.map(p=>Object.assign({},p,{_s:"B"})),c.R.map(p=>Object.assign({},p,{_s:"R"})));
+          if(people.length===0) continue;
+          body+='<tr><td class="grp" rowspan="'+people.length+'">'+esc(time)+'<br><span class="rt">'+esc(ROUTE_NM[route.id]||route.id)+'</span>'+(r.summer?'<br><span class="su">暑期</span>':'')+'</td>';
+          people.forEach(function(p,i){
+            if(i>0) body+="<tr>";
+            body+='<td>'+esc(labelName(p._s))+'</td><td class="nm">'+esc(p.name)+'</td><td>'+esc(p.phone||"")+'</td><td>'+esc(p.stop||"")+'</td><td>'+esc(p.note||"")+'</td><td class="sign"></td></tr>';
+          });
+        }
+      }
+      if(!body) continue;
+      pages+='<div class="page"><h2>週'+DAY_NAME[day]+' 接駁名單　<span class="sub">'+numA+'A / '+numB+'B</span></h2><table><thead><tr><th>時段/路線</th><th>梯次</th><th>姓名</th><th>電話</th><th>上車站</th><th>備註</th><th>簽到</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    }
+    if(!pages){ alert("目前沒有任何名單可列印。"); return; }
+    const html='<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>接駁名單</title><style>'
+      +'*{box-sizing:border-box;}body{font-family:system-ui,"Microsoft JhengHei",sans-serif;margin:0;color:#111;}'
+      +'.page{padding:18px 22px;page-break-after:always;}.page:last-child{page-break-after:auto;}'
+      +'h2{font-size:20px;margin:0 0 10px;border-bottom:2px solid #333;padding-bottom:6px;}'
+      +'.sub{font-size:13px;color:#666;font-weight:400;}'
+      +'table{width:100%;border-collapse:collapse;font-size:14px;}'
+      +'th,td{border:1px solid #999;padding:6px 8px;text-align:left;}th{background:#eee;font-size:13px;}'
+      +'td.grp{font-weight:700;background:#f7f7f7;white-space:nowrap;text-align:center;vertical-align:middle;}'
+      +'td.grp .rt{font-size:12px;color:#2563eb;}td.grp .su{font-size:11px;color:#c2410c;}'
+      +'td.nm{font-weight:700;}td.sign{width:60px;}@media print{@page{margin:12mm;}}'
+      +'</style></head><body>'+pages+'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>';
+    const w=window.open("","_blank");
+    if(!w){ alert("瀏覽器擋住了新視窗，請允許彈出視窗後再試。"); return; }
+    w.document.write(html); w.document.close();
+  }
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
   const labelOf=(s)=>s==="A"?nameA():s==="B"?nameB():"補考/機車";
   const prepLabelOf=(s)=>s==="A"?prepNameA():s==="B"?prepNameB():"補考/機車";
@@ -436,6 +486,7 @@ function Counter() {
         h("button",{onClick:()=>setPage("prep"),style:tabBtn(page==="prep")},"新生預備班表"),
         h("button",{onClick:()=>setPage("log"),style:tabBtn(page==="log")},"異動紀錄"),
       ),
+      h("button",{onClick:printWeek,style:{padding:"6px 12px",borderRadius:8,border:"1px solid #d1d5db",background:"#fff",color:"#374151",fontSize:13,fontWeight:600,cursor:"pointer"}},"🖨 列印週表"),
       h(OperatorPicker,{staff,operator,setOperator}),
       h("span",{style:{fontSize:12,color:saving?"#d97706":"#059669"}}, saving?"儲存中…":"● 已同步"),
     ),
