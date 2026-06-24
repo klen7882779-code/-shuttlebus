@@ -57,6 +57,11 @@ function Driver() {
   const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
   const todayDay = new Date().getDay();
+  // 預設選今天；今天若不在當前分頁的日子裡，就選第一天
+  const [selDay, setSelDay] = useState(days.includes(todayDay)?todayDay:days[0]);
+  // 切換平日/假日時，自動把選中日校正到合法範圍
+  useEffect(()=>{ if(!days.includes(selDay)) setSelDay(days.includes(todayDay)?todayDay:days[0]); },[tab]);
+  const shownDays = days.includes(selDay)?[selDay]:[days[0]];
 
   if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
 
@@ -70,10 +75,19 @@ function Driver() {
       h("span",{style:{marginLeft:"auto",fontSize:12,color:"#059669"}},"● 即時"),
     ),
     // 當期梯次圖例
-    h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14,fontSize:12}},
+    h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10,fontSize:12}},
       tag("A",`${numA}A`), tag("B",`${numB}B`), tag("R","補考/機車"),
     ),
-    days.map(day=>{
+    // 星期切換
+    h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},
+      days.map(day=>{
+        const sel=day===selDay; const isT=day===todayDay;
+        return h("button",{key:day,onClick:()=>setSelDay(day),style:{position:"relative",padding:"8px 14px",borderRadius:10,border:sel?"none":"1px solid #e5e7eb",background:sel?"#2563eb":"#fff",color:sel?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}},
+          "週"+DAY_NAME[day],
+          isT?h("span",{style:{marginLeft:4,fontSize:10,color:sel?"#bfdbfe":"#2563eb",fontWeight:600}},"今天"):null);
+      }),
+    ),
+    shownDays.map(day=>{
       const isToday = day===todayDay;
       const slotRows = grid.map(row=>{
         const dc = row.days.find(x=>x.day===day);
