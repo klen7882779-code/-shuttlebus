@@ -59,6 +59,8 @@ function Counter() {
   const [prep, setPrep] = useState({});       // 新生預備名單
   const [archive, setArchive] = useState([]); // 封存（升期退場），留30天
   const [openCell, setOpenCell] = useState(null);
+  const [allOpen, setAllOpen] = useState(true); // 預設全部攤開
+  const [closedSet, setClosedSet] = useState({}); // 全開模式下，被單獨收起的格子
   const [clip, setClip] = useState(null); // 複製來源 {mode:'cell'|'day', table, key?, day?}
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -421,6 +423,16 @@ function Counter() {
   }
 
   const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
+  // 展開邏輯：allOpen 時預設全開（closedSet 內的單獨收）；非 allOpen 時只開 openCell
+  const isOpenFn = (key)=> allOpen ? !closedSet[key] : openCell===key;
+  function toggleOpen(key){
+    if(allOpen){ setClosedSet(s=>({...s,[key]: !s[key]})); }
+    else { setOpenCell(openCell===key?null:key); }
+  }
+  function toggleAll(){
+    if(allOpen){ setAllOpen(false); setOpenCell(null); setClosedSet({}); } // 全部收合
+    else { setAllOpen(true); setClosedSet({}); } // 全部攤開
+  }
   function toggleSummer(){ if(!requireOp())return; const v=!summer; setSummer(v); persist({summer:v}); writeLog({who:who(),act:"暑期模式",slot:tab==='weekday'?'平日':'假日',name:v?'開啟':'關閉'}); }
   function printWeek(onlyRid){
     const esc=(t)=>String(t==null?"":t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -514,9 +526,10 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:prepNumA,onSave:(v)=>setNum("PA",v)}),"A"),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:prepNumB,onSave:(v)=>setNum("PB",v)}),"B"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
+        h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
       ),
       h(WeekTable,{
-        grid,days,openCell,setOpenCell,
+        grid,days,isOpenFn,toggleOpen,
         cellOf:pcell, leftOf:(k)=>Math.min(prepLeft(k,"A"),prepLeft(k,"B")),
         labelA:prepNameA(), labelB:prepNameB(),
         prepMode:true, prepLeftFn:prepLeft,
@@ -535,12 +548,13 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:numB,onSave:(v)=>setNum("B",v)}),"B"),
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考/機車"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
+        h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
         h("span",{style:{flex:1}}),
         h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
         h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B → ${prepNameB()}`),
       ),
       h(WeekTable,{
-        grid,days,openCell,setOpenCell,
+        grid,days,isOpenFn,toggleOpen,
         cellOf:cell, leftOf:left,
         labelA:nameA(), labelB:nameB(),
         prepMode:false,
@@ -553,7 +567,7 @@ function Counter() {
 }
 
 // ── 週表元件（營運表與預備表共用）──
-function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
+function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
   const copying = !!clip;
   const srcLabel = clip ? (clip.mode==="day" ? `週${DAY_NAME[clip.day]} 整天` : clip.mode==="person" ? clip.person.name : "單一班次") : "";
   // 整天沒有任何班次的日子（例如平日的週三）→ 顯示「接駁車休息」
@@ -597,7 +611,7 @@ function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,
           dc.routes.length===0?h("span",{style:{color:"#d1d5db",fontSize:12}},"—"):null,
           dc.routes.map(({route,time})=>{
             const key=tk(route.id,dc.day,time); const c=cellOf(key);
-            const isOpen=openCell===key;
+            const isOpen=isOpenFn(key);
             const lfShow = prepMode ? null : leftOf(key);
             const pLeftA = prepMode ? prepLeftFn(key,"A") : null;
             const pLeftB = prepMode ? prepLeftFn(key,"B") : null;
@@ -619,7 +633,7 @@ function WeekTable({ grid,days,openCell,setOpenCell,cellOf,leftOf,labelA,labelB,
                     ? h("div",{style:{marginTop:4,fontSize:11,textAlign:"center",color:"#b45309",fontWeight:700}},"← 來源")
                     : h("button",{onClick:()=>pasteToCell(key),style:{marginTop:4,width:"100%",fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700}},"⬇貼到這班"))
                 : h("div",{style:{display:"flex",gap:4,marginTop:4}},
-                    h("button",{onClick:()=>setOpenCell(isOpen?null:key),style:{flex:1,fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
+                    h("button",{onClick:()=>toggleOpen(key),style:{flex:1,fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
                     (c.A.length+c.B.length+c.R.length)>0 ? h("button",{onClick:()=>startCopyCell(key),title:"複製這班",style:{fontSize:11,padding:"3px 8px",borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600}},"複製") : null,
                   ),
               isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson}):null,
