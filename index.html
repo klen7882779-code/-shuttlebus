@@ -205,6 +205,7 @@ function Counter() {
     if(!requireOp())return;
     const c=data[k]||EMPTY();
     const target=c[side].find(x=>x.id===id);
+    if(!confirm(`確定刪除「${target?target.name:""}」？`)) return;
     const next={...data,[k]:{...c,[side]:c[side].filter(x=>x.id!==id)}};
     setData(next);persist({data:next});
     writeLog({ who:who(), act:"刪除", slot:slotDesc(k), side, name:target?target.name:"" });
@@ -239,6 +240,7 @@ function Counter() {
     if(!requireOp())return;
     const c=prep[k]||EMPTY();
     const target=c[side].find(x=>x.id===id);
+    if(!confirm(`確定刪除「${target?target.name:""}」？`)) return;
     const next={...prep,[k]:{...c,[side]:c[side].filter(x=>x.id!==id)}};
     setPrep(next);persist({prep:next});
     writeLog({ who:who(), act:"預備刪除", slot:slotDesc(k), side, name:target?target.name:"" });
