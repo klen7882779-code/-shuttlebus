@@ -184,12 +184,15 @@ function Counter() {
 
   // 預備表 cell
   const pcell=(k)=>prep[k]||EMPTY();
-  // 預備剩餘位 = 10 − 營運表對向欄人數（預備A看營運B、預備B看營運A）
+  // 預備剩餘位（簡化版）= 10 − 營運對向欄 − 預備另一欄
+  //  預備A 扣：營運B + 預備B；預備B 扣：營運A + 預備A
   function prepLeft(k, side){
     const oc = data[k]||EMPTY();
-    const opposite = side==="A" ? oc.B.length : oc.A.length;
-    const usedThis = (prep[k]||EMPTY())[side].length;
-    return SEAT_CAP - opposite - usedThis;
+    const pc = prep[k]||EMPTY();
+    const opViaOperating = side==="A" ? oc.B.length : oc.A.length; // 正式班對向
+    const opViaPrep      = side==="A" ? pc.B.length : pc.A.length; // 預備另一欄
+    const usedThis = pc[side].length;
+    return SEAT_CAP - opViaOperating - opViaPrep - usedThis;
   }
 
   // ── 營運表操作 ──
