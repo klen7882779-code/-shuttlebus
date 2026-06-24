@@ -422,12 +422,12 @@ function Counter() {
 
   const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
   function toggleSummer(){ if(!requireOp())return; const v=!summer; setSummer(v); persist({summer:v}); writeLog({who:who(),act:"暑期模式",slot:tab==='weekday'?'平日':'假日',name:v?'開啟':'關閉'}); }
-  function printWeek(){
+  function printWeek(onlyRid){
     const esc=(t)=>String(t==null?"":t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
     const labelName=(s)=> s==="A"?(numA+"A") : s==="B"?(numB+"B") : "補考/機車";
     const ROUTE_NM={gongguan:"公館線",zhongxiao:"忠孝復興線",zhonghe:"中和線"};
     const allDays=[1,2,3,4,5,6,0];
-    const routeOrder=["gongguan","zhongxiao","zhonghe"];
+    const routeOrder = onlyRid ? [onlyRid] : ["gongguan","zhongxiao","zhonghe"];
     let pages="";
     // 一條線一頁，內含整週（週一到週日）
     for(const rid of routeOrder){
@@ -464,7 +464,7 @@ function Counter() {
       if(!body) continue;
       pages+='<div class="page"><h2>'+esc(ROUTE_NM[rid])+' 接駁名單　<span class="sub">'+numA+'A / '+numB+'B　整週</span></h2><table><thead><tr><th>時段</th><th>梯次</th><th>姓名</th><th>電話</th><th>上車站</th><th>備註</th><th>簽到</th></tr></thead><tbody>'+body+'</tbody></table></div>';
     }
-    if(!pages){ alert("目前沒有任何名單可列印。"); return; }
+    if(!pages){ alert((onlyRid?ROUTE_NM[onlyRid]:"")+"目前沒有名單可列印。"); return; }
     const html='<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>接駁名單</title><style>'
       +'*{box-sizing:border-box;}body{font-family:system-ui,"Microsoft JhengHei",sans-serif;margin:0;color:#111;}'
       +'.page{padding:18px 22px;page-break-after:always;}.page:last-child{page-break-after:auto;}'
@@ -494,7 +494,9 @@ function Counter() {
         h("button",{onClick:()=>setPage("prep"),style:tabBtn(page==="prep")},"新生預備班表"),
         h("button",{onClick:()=>setPage("log"),style:tabBtn(page==="log")},"異動紀錄"),
       ),
-      h("button",{onClick:printWeek,style:{padding:"6px 12px",borderRadius:8,border:"1px solid #d1d5db",background:"#fff",color:"#374151",fontSize:13,fontWeight:600,cursor:"pointer"}},"🖨 列印週表"),
+      h("button",{onClick:()=>printWeek("gongguan"),style:printBtn("#2563eb")},"🖨 公館"),
+      h("button",{onClick:()=>printWeek("zhongxiao"),style:printBtn("#059669")},"🖨 忠孝"),
+      h("button",{onClick:()=>printWeek("zhonghe"),style:printBtn("#d97706")},"🖨 中和"),
       h(OperatorPicker,{staff,operator,setOperator}),
       h("span",{style:{fontSize:12,color:saving?"#d97706":"#059669"}}, saving?"儲存中…":"● 已同步"),
     ),
@@ -805,6 +807,7 @@ const copyDayBtn={marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:5,borde
 const pasteDayBtn={marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:5,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700};
 const summerOffBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #fdba74",background:"#fff",color:"#c2410c",fontSize:12,fontWeight:700,cursor:"pointer"};
 const summerOnBtn={padding:"5px 12px",borderRadius:6,border:"none",background:"#f97316",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"};
+const printBtn=(c)=>({padding:"6px 10px",borderRadius:8,border:"1px solid "+c,background:"#fff",color:c,fontSize:13,fontWeight:700,cursor:"pointer"});
 const promoteBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #93c5fd",background:"#eff6ff",color:"#1d4ed8",fontSize:12,fontWeight:700,cursor:"pointer"};
 const cohortInput={width:64,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13,fontWeight:600};
 const sideBtn=(a,color)=>({padding:"4px 10px",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,background:a?color:"#fff",color:a?"#fff":"#6b7280"});
