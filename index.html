@@ -620,13 +620,13 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
               h("div",{style:{display:"flex",alignItems:"center",gap:6}},
                 h("span",{style:{fontSize:12,fontWeight:700,color:route.color}},route.name),
                 prepMode
-                  ? h("span",{style:{fontSize:10,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}/B${pLeftB}`)
+                  ? h("span",{style:{fontSize:10,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}位/B${pLeftB}位`)
                   : h("span",{style:{fontSize:11,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},"剩"+lfShow),
               ),
               h("div",{style:{fontSize:11,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},
-                h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}`),
-                h("span",{style:{color:SIDE_COLORS.B}},`${labelB} ${c.B.length}`),
-                prepMode?null:h("span",{style:{color:SIDE_COLORS.R}},`補考/機車 ${c.R.length}`),
+                h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}位`),
+                h("span",{style:{color:SIDE_COLORS.B}},`${labelB} ${c.B.length}位`),
+                prepMode?null:h("span",{style:{color:SIDE_COLORS.R}},`補考/機車 ${c.R.length}位`),
               ),
               copying
                 ? (isClipSrc
