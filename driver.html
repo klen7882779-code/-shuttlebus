@@ -112,7 +112,7 @@ function Driver() {
                   countChip("A",labelOf("A"),c.A.length),
                   countChip("B",labelOf("B"),c.B.length),
                   c.R.length>0?countChip("R","補考/機車",c.R.length):null,
-                  h("span",{style:{fontWeight:700,color:"#334155"}},`共${cnt}`),
+                  h("span",{style:{fontWeight:700,color:"#334155"}},`共${cnt}位`),
                 ),
               ),
               cnt>0
@@ -135,7 +135,7 @@ function Driver() {
       h("span",{style:{width:8,height:8,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block"}}), label);
   }
   function countChip(side,label,n){
-    return h("span",{style:{background:TAG_BG[side],color:TAG_FG[side],borderRadius:5,padding:"1px 6px",fontWeight:700}},`${label} ${n}`);
+    return h("span",{style:{background:TAG_BG[side],color:TAG_FG[side],borderRadius:5,padding:"1px 6px",fontWeight:700}},`${label} ${n}位`);
   }
 }
 
