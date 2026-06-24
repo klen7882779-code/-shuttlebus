@@ -106,7 +106,7 @@ function Driver() {
             const key=tk(route.id,day,time); const c=cell(key); const cnt=used(key);
             return h("div",{key:route.id,style:{marginBottom:10,paddingLeft:10,borderLeft:`4px solid ${route.color}`}},
               h("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
-                h("span",{style:{fontSize:14,fontWeight:700,color:route.color}},route.name),
+                h("span",{style:{fontSize:20,fontWeight:800,color:route.color}},route.name),
                 // 各梯人數
                 h("span",{style:{marginLeft:"auto",display:"flex",gap:6,fontSize:12}},
                   countChip("A",labelOf("A"),c.A.length),
