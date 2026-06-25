@@ -61,6 +61,7 @@ function Counter() {
   const [openCell, setOpenCell] = useState(null);
   const [allOpen, setAllOpen] = useState(true); // 預設全部攤開
   const [closedSet, setClosedSet] = useState({}); // 全開模式下，被單獨收起的格子
+  const [selRoute, setSelRoute] = useState("all"); // 路線篩選 all/gongguan/zhongxiao/zhonghe
   const [clip, setClip] = useState(null); // 複製來源 {mode:'cell'|'day', table, key?, day?}
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -541,8 +542,9 @@ function Counter() {
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
         h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
       ),
+      h(RouteFilter,{selRoute,setSelRoute}),
       h(WeekTable,{
-        grid,days,isOpenFn,toggleOpen,
+        grid,days,isOpenFn,toggleOpen,selRoute,
         cellOf:pcell, leftOf:(k)=>Math.min(prepLeft(k,"A"),prepLeft(k,"B")),
         labelA:prepNameA(), labelB:prepNameB(),
         prepMode:true, prepLeftFn:prepLeft,
@@ -566,8 +568,9 @@ function Counter() {
         h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
         h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B → ${prepNameB()}`),
       ),
+      h(RouteFilter,{selRoute,setSelRoute}),
       h(WeekTable,{
-        grid,days,isOpenFn,toggleOpen,
+        grid,days,isOpenFn,toggleOpen,selRoute,
         cellOf:cell, leftOf:left,
         labelA:nameA(), labelB:nameB(),
         prepMode:false,
@@ -580,7 +583,17 @@ function Counter() {
 }
 
 // ── 週表元件（營運表與預備表共用）──
-function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
+function RouteFilter({ selRoute, setSelRoute }){
+  const opts=[{id:"all",name:"全部",color:"#475569"},{id:"gongguan",name:"公館",color:"#2563eb"},{id:"zhongxiao",name:"忠孝",color:"#059669"},{id:"zhonghe",name:"中和",color:"#d97706"}];
+  return h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}},
+    opts.map(o=>{
+      const sel=o.id===selRoute;
+      return h("button",{key:o.id,onClick:()=>setSelRoute(o.id),style:{padding:"6px 16px",borderRadius:10,border:sel?"none":"1px solid #e5e7eb",background:sel?o.color:"#fff",color:sel?"#fff":o.color,fontSize:15,fontWeight:800,cursor:"pointer"}},o.name);
+    }),
+  );
+}
+
+function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
   const copying = !!clip;
   const srcLabel = clip ? (clip.mode==="day" ? `週${DAY_NAME[clip.day]} 整天` : clip.mode==="person" ? clip.person.name : "單一班次") : "";
   // 整天沒有任何班次的日子（例如平日的週三）→ 顯示「接駁車休息」
@@ -621,8 +634,9 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
               showText ? h("div",{style:{color:"#94a3b8",fontSize:16,fontWeight:600,lineHeight:1.6}},"🚌",h("br"),"接駁車休息") : null);
           }
           return h("td",{key:dc.day,style:tdCell},
-          dc.routes.length===0?h("span",{style:{color:"#d1d5db",fontSize:15}},"—"):null,
-          dc.routes.map(({route,time})=>{
+          (()=>{ const fr = selRoute==="all"?dc.routes:dc.routes.filter(x=>x.route.id===selRoute); return [
+          fr.length===0?h("span",{key:"none",style:{color:"#d1d5db",fontSize:15}},"—"):null,
+          fr.map(({route,time})=>{
             const key=tk(route.id,dc.day,time); const c=cellOf(key);
             const isOpen=isOpenFn(key);
             const lfShow = prepMode ? null : leftOf(key);
@@ -653,6 +667,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
               isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson}):null,
             );
           })
+          ]; })()
         );
         })
       ))),
