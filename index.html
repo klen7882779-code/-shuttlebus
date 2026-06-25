@@ -631,6 +631,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
             const isClipSrc = clip && clip.mode==="cell" && clip.key===key;
             return h("div",{key:route.id,style:{marginBottom:6,border:isClipSrc?"2px solid #f59e0b":`1px solid ${route.color}33`,borderLeft:`3px solid ${route.color}`,borderRadius:8,padding:"6px 8px",background:isClipSrc?"#fffbeb":"#fff"}},
               h("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                h("span",{style:{fontSize:15,fontWeight:800,color:"#1e293b",background:"#f1f5f9",borderRadius:5,padding:"1px 7px",marginRight:2}},time),
                 h("span",{style:{fontSize:15,fontWeight:700,color:route.color}},route.name),
                 prepMode
                   ? h("span",{style:{fontSize:14,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}位/B${pLeftB}位`)
