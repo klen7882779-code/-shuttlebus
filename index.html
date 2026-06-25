@@ -40,10 +40,10 @@ function Gate({ title, hint, pass, onPass }) {
   const [v,setV]=useState(""); const [err,setErr]=useState(false);
   function go(){ if(v===pass){ onPass(); } else setErr(true); }
   return h("div",{className:"gate"},
-    h("div",{style:{fontSize:18,fontWeight:800,marginBottom:4}},title),
-    h("div",{style:{fontSize:13,color:"#6b7280"}},hint),
+    h("div",{style:{fontSize:20,fontWeight:800,marginBottom:4}},title),
+    h("div",{style:{fontSize:16,color:"#6b7280"}},hint),
     h("input",{type:"password",value:v,placeholder:"密碼",onChange:(e)=>{setV(e.target.value);setErr(false);},onKeyDown:(e)=>e.key==="Enter"&&go()}),
-    err?h("div",{style:{color:"#dc2626",fontSize:13,marginBottom:8}},"密碼錯誤"):null,
+    err?h("div",{style:{color:"#dc2626",fontSize:16,marginBottom:8}},"密碼錯誤"):null,
     h("button",{onClick:go},"進入"),
   );
 }
@@ -513,7 +513,7 @@ function Counter() {
 
   return h("div", { style:{ fontFamily:"system-ui,sans-serif",maxWidth:1750,margin:"0 auto",padding:16,color:"#1f2937" } },
     h("div", { style:{ display:"flex",alignItems:"center",gap:12,marginBottom:14,flexWrap:"wrap" } },
-      h("h1", { style:{ fontSize:22,fontWeight:800,margin:0 } }, "接駁車週表 ", h("span",{style:{fontSize:13,color:"#6b7280",fontWeight:500}},"櫃台")),
+      h("h1", { style:{ fontSize:26,fontWeight:800,margin:0 } }, "接駁車週表 ", h("span",{style:{fontSize:16,color:"#6b7280",fontWeight:500}},"櫃台")),
       h("div", { style:tabGroup },
         h("button",{onClick:()=>setPage("table"),style:tabBtn(page==="table")},"班表"),
         h("button",{onClick:()=>setPage("prep"),style:tabBtn(page==="prep")},"新生預備班表"),
@@ -523,14 +523,14 @@ function Counter() {
       h("button",{onClick:()=>printWeek("zhongxiao"),style:printBtn("#059669")},"🖨 忠孝"),
       h("button",{onClick:()=>printWeek("zhonghe"),style:printBtn("#d97706")},"🖨 中和"),
       h(OperatorPicker,{staff,operator,setOperator}),
-      h("span",{style:{fontSize:12,color:saving?"#d97706":"#059669"}}, saving?"儲存中…":"● 已同步"),
+      h("span",{style:{fontSize:15,color:saving?"#d97706":"#059669"}}, saving?"儲存中…":"● 已同步"),
     ),
 
     page==="log" ? h(LogPage,{archive}) :
     page==="prep" ? h("div",null,
-      h("div",{style:{border:"1px solid #fde68a",background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#92400e"}},
+      h("div",{style:{border:"1px solid #fde68a",background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:16,color:"#92400e"}},
         "這是下期招生的預備名單，不佔營運車位。每班「剩 N」= 10 − 升期後仍留車上的對向梯次人數，填滿就無法再加（避免升期爆位）。等該梯開課，到「班表」頁按升期搬上車。"),
-      h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:14 } },
+      h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:16 } },
         h("div", { style:tabGroup },
           h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日 一～五"),
           h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
@@ -539,7 +539,7 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:prepNumA,onSave:(v)=>setNum("PA",v)}),"A"),
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:prepNumB,onSave:(v)=>setNum("PB",v)}),"B"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
-        h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
+        h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
       ),
       h(WeekTable,{
         grid,days,isOpenFn,toggleOpen,
@@ -551,7 +551,7 @@ function Counter() {
       }),
     ) : h("div",null,
       h(HelpBox,{showHelp,setShowHelp}),
-      h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:14 } },
+      h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:16 } },
         h("div", { style:tabGroup },
           h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日 一～五"),
           h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
@@ -561,7 +561,7 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:numB,onSave:(v)=>setNum("B",v)}),"B"),
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考/機車"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
-        h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
+        h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
         h("span",{style:{flex:1}}),
         h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
         h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B → ${prepNameB()}`),
@@ -574,7 +574,7 @@ function Counter() {
         addP,removeP,editP,labelOf,
         clip, startCopyCell, startCopyDay, startCopyPerson, pasteToCell, pasteToDay, cancelCopy,
       }),
-      h("p",{style:{fontSize:12,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。升A／升B 會把預備該欄搬上車、舊欄封存，需升期密碼。"),
+      h("p",{style:{fontSize:15,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。升A／升B 會把預備該欄搬上車、舊欄封存，需升期密碼。"),
     ),
   );
 }
@@ -591,12 +591,12 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
   }
   const firstRestRow = {}; // 每個休息日，記第一個出現的列index，只在那列顯示文字
   return h("div",null,
-    copying ? h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#fef9c3",border:"1px solid #fde047",borderRadius:10,padding:"8px 14px",marginBottom:10,fontSize:13,flexWrap:"wrap"}},
+    copying ? h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#fef9c3",border:"1px solid #fde047",borderRadius:10,padding:"8px 14px",marginBottom:10,fontSize:16,flexWrap:"wrap"}},
       h("span",{style:{fontWeight:700,color:"#854d0e"}},`📋 已複製「${srcLabel}」`),
       h("span",{style:{color:"#854d0e"}}, clip.mode==="day" ? "請點目標『那天的標題下方的貼到這天』" : "點某班的「貼到這班」，或點某天標題貼到整天對應班次"),
-      h("button",{onClick:cancelCopy,style:{marginLeft:"auto",border:"none",background:"#854d0e",color:"#fff",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}},"取消複製"),
+      h("button",{onClick:cancelCopy,style:{marginLeft:"auto",border:"none",background:"#854d0e",color:"#fff",borderRadius:6,padding:"4px 12px",fontSize:15,fontWeight:600,cursor:"pointer"}},"取消複製"),
     ) : null,
-    copying ? h("button",{onClick:cancelCopy,style:{position:"fixed",right:16,bottom:20,zIndex:60,border:"none",background:"#854d0e",color:"#fff",borderRadius:24,padding:"12px 22px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)"}},"✕ 取消複製") : null,
+    copying ? h("button",{onClick:cancelCopy,style:{position:"fixed",right:16,bottom:20,zIndex:60,border:"none",background:"#854d0e",color:"#fff",borderRadius:24,padding:"12px 22px",fontSize:16,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)"}},"✕ 取消複製") : null,
     h("div",{id:"tableWrap",style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
     h("table",{id:"mainTable",style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:760}},
       h("thead",{id:"mainThead"},h("tr",null,
@@ -610,18 +610,18 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
       )),
       h("tbody",null,grid.map((row,rowIdx)=>h("tr",{key:row.slot.time},
         h("td",{style:row.slot.summer?{...tdTime,background:"#fff7ed"}:tdTime},
-          h("div",{style:{fontWeight:800,fontSize:15,color:row.slot.summer?"#c2410c":"#1f2937"}},row.slot.time),
-          h("div",{style:{fontSize:11,color:row.slot.summer?"#ea580c":"#9ca3af",fontWeight:row.slot.summer?700:400}},row.slot.summer?"☀暑期":row.slot.label)),
+          h("div",{style:{fontWeight:800,fontSize:17,color:row.slot.summer?"#c2410c":"#1f2937"}},row.slot.time),
+          h("div",{style:{fontSize:14,color:row.slot.summer?"#ea580c":"#9ca3af",fontWeight:row.slot.summer?700:400}},row.slot.summer?"☀暑期":row.slot.label)),
         row.days.map(dc=>{
           if(restDays[dc.day]){
             // 休息日：只在第一列顯示提示，其餘留白
             if(firstRestRow[dc.day]===undefined) firstRestRow[dc.day]=rowIdx;
             const showText = firstRestRow[dc.day]===rowIdx;
             return h("td",{key:dc.day,style:{...tdCell,background:"#f8fafc",textAlign:"center",verticalAlign:"middle"}},
-              showText ? h("div",{style:{color:"#94a3b8",fontSize:13,fontWeight:600,lineHeight:1.6}},"🚌",h("br"),"接駁車休息") : null);
+              showText ? h("div",{style:{color:"#94a3b8",fontSize:16,fontWeight:600,lineHeight:1.6}},"🚌",h("br"),"接駁車休息") : null);
           }
           return h("td",{key:dc.day,style:tdCell},
-          dc.routes.length===0?h("span",{style:{color:"#d1d5db",fontSize:12}},"—"):null,
+          dc.routes.length===0?h("span",{style:{color:"#d1d5db",fontSize:15}},"—"):null,
           dc.routes.map(({route,time})=>{
             const key=tk(route.id,dc.day,time); const c=cellOf(key);
             const isOpen=isOpenFn(key);
@@ -631,23 +631,23 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,cellOf,leftOf,labelA,labelB,p
             const isClipSrc = clip && clip.mode==="cell" && clip.key===key;
             return h("div",{key:route.id,style:{marginBottom:6,border:isClipSrc?"2px solid #f59e0b":`1px solid ${route.color}33`,borderLeft:`3px solid ${route.color}`,borderRadius:8,padding:"6px 8px",background:isClipSrc?"#fffbeb":"#fff"}},
               h("div",{style:{display:"flex",alignItems:"center",gap:6}},
-                h("span",{style:{fontSize:12,fontWeight:700,color:route.color}},route.name),
+                h("span",{style:{fontSize:15,fontWeight:700,color:route.color}},route.name),
                 prepMode
-                  ? h("span",{style:{fontSize:10,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}位/B${pLeftB}位`)
-                  : h("span",{style:{fontSize:11,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},"剩"+lfShow),
+                  ? h("span",{style:{fontSize:14,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}位/B${pLeftB}位`)
+                  : h("span",{style:{fontSize:14,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},"剩"+lfShow),
               ),
-              h("div",{style:{fontSize:11,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},
+              h("div",{style:{fontSize:14,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},
                 h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}位`),
                 h("span",{style:{color:SIDE_COLORS.B}},`${labelB} ${c.B.length}位`),
                 prepMode?null:h("span",{style:{color:SIDE_COLORS.R}},`補考/機車 ${c.R.length}位`),
               ),
               copying
                 ? (isClipSrc
-                    ? h("div",{style:{marginTop:4,fontSize:11,textAlign:"center",color:"#b45309",fontWeight:700}},"← 來源")
-                    : h("button",{onClick:()=>pasteToCell(key),style:{marginTop:4,width:"100%",fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700}},"⬇貼到這班"))
+                    ? h("div",{style:{marginTop:4,fontSize:14,textAlign:"center",color:"#b45309",fontWeight:700}},"← 來源")
+                    : h("button",{onClick:()=>pasteToCell(key),style:{marginTop:4,width:"100%",fontSize:14,padding:"3px 0",borderRadius:6,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700}},"⬇貼到這班"))
                 : h("div",{style:{display:"flex",gap:4,marginTop:4}},
-                    h("button",{onClick:()=>toggleOpen(key),style:{flex:1,fontSize:11,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
-                    (c.A.length+c.B.length+c.R.length)>0 ? h("button",{onClick:()=>startCopyCell(key),title:"複製這班",style:{fontSize:11,padding:"3px 8px",borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600}},"複製") : null,
+                    h("button",{onClick:()=>toggleOpen(key),style:{flex:1,fontSize:14,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
+                    (c.A.length+c.B.length+c.R.length)>0 ? h("button",{onClick:()=>startCopyCell(key),title:"複製這班",style:{fontSize:14,padding:"3px 8px",borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600}},"複製") : null,
                   ),
               isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson}):null,
             );
@@ -665,10 +665,10 @@ function HelpBox({ showHelp, setShowHelp }){
   const item=(t)=>h("li",{style:{marginBottom:4,lineHeight:1.6}},t);
   return h("div",{style:{border:"1px solid #dbeafe",background:"#eff6ff",borderRadius:12,padding:showHelp?"12px 16px":"8px 16px",marginBottom:14}},
     h("div",{style:{display:"flex",alignItems:"center"}},
-      h("span",{style:{fontWeight:800,fontSize:14,color:"#1e40af"}},"使用說明"),
-      h("button",{onClick:toggle,style:{marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:13,fontWeight:600}}, showHelp?"收合 ▲":"展開 ▼"),
+      h("span",{style:{fontWeight:800,fontSize:16,color:"#1e40af"}},"使用說明"),
+      h("button",{onClick:toggle,style:{marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:16,fontWeight:600}}, showHelp?"收合 ▲":"展開 ▼"),
     ),
-    showHelp ? h("ul",{style:{margin:"8px 0 0",paddingLeft:20,fontSize:13,color:"#374151"}},
+    showHelp ? h("ul",{style:{margin:"8px 0 0",paddingLeft:20,fontSize:16,color:"#374151"}},
       item("登記前請先在右上角「選擇操作者」，否則無法登記或修改。"),
       item("每班共 10 個座位，由 A 梯、B 梯、補考/機車 三組共用，互相扣抵；補考/機車生只在還有空位時遞補。"),
       item("點班次格子的「登記/名單」展開，先選 A／B／補考機車，再填姓名、電話、備註（可填首堂上課日）。"),
@@ -708,16 +708,16 @@ function OperatorPicker({ staff, operator, setOperator }){
     else { setMode("list"); setOperator(v); localStorage.setItem("op_name",v); }
   }
   const unset = !operator.trim();
-  return h("label",{style:{display:"flex",alignItems:"center",gap:4,fontSize:13,color:unset?"#dc2626":"#6b7280",marginLeft:"auto",fontWeight:unset?700:400}},unset?"⚠ 請選操作者":"操作者",
+  return h("label",{style:{display:"flex",alignItems:"center",gap:4,fontSize:16,color:unset?"#dc2626":"#6b7280",marginLeft:"auto",fontWeight:unset?700:400}},unset?"⚠ 請選操作者":"操作者",
     h("select",{value: mode==="other"?"__other__":operator, onChange:(e)=>pick(e.target.value),
-      style:{padding:"4px 6px",borderRadius:6,border:unset?"2px solid #dc2626":"1px solid #d1d5db",fontSize:13,background:unset?"#fef2f2":"#fff"}},
+      style:{padding:"4px 6px",borderRadius:6,border:unset?"2px solid #dc2626":"1px solid #d1d5db",fontSize:16,background:unset?"#fef2f2":"#fff"}},
       h("option",{value:"",disabled:true},"請選擇"),
       staff.map(n=>h("option",{key:n,value:n},n)),
       h("option",{value:"__other__"},"其他…"),
     ),
     mode==="other"?h("input",{value:operator,placeholder:"手打名字",autoFocus:true,
       onChange:(e)=>{setOperator(e.target.value);localStorage.setItem("op_name",e.target.value);},
-      style:{width:72,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13}}):null,
+      style:{width:72,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:16}}):null,
   );
 }
 
@@ -734,13 +734,13 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
       h("button",{onClick:()=>setSide("B"),style:sideBtn(side==="B",SIDE_COLORS.B)},labelOf("B")),
       prepMode?null:h("button",{onClick:()=>setSide("R"),style:sideBtn(side==="R",SIDE_COLORS.R)},"補考/機車"),
     ),
-    prepMode?h("div",{style:{fontSize:11,color:sideLeft<=0?"#dc2626":"#6b7280",marginTop:4}},`${labelOf(side)} 這班還可收 ${sideLeft} 位`):null,
+    prepMode?h("div",{style:{fontSize:14,color:sideLeft<=0?"#dc2626":"#6b7280",marginTop:4}},`${labelOf(side)} 這班還可收 ${sideLeft} 位`):null,
     h("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
       h("input",{placeholder:"姓名",value:name,onChange:(e)=>setName(e.target.value),style:inS(60)}),
       h("input",{placeholder:"電話",value:phone,onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:inS(92)}),
       h("input",{placeholder:"備註(首堂日…)",value:note,onChange:(e)=>setNote(e.target.value),style:inS(110)}),
-      stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"5px",borderRadius:6,border:"1px solid #d1d5db",fontSize:12,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
-      h("button",{onClick:submit,disabled:sideLeft<=0,style:{padding:"5px 10px",borderRadius:6,border:"none",background:sideLeft<=0?"#d1d5db":"#1f2937",color:"#fff",fontSize:12,fontWeight:600,cursor:sideLeft<=0?"not-allowed":"pointer"}},sideLeft<=0?"滿":"加"),
+      stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"5px",borderRadius:6,border:"1px solid #d1d5db",fontSize:15,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
+      h("button",{onClick:submit,disabled:sideLeft<=0,style:{padding:"5px 10px",borderRadius:6,border:"none",background:sideLeft<=0?"#d1d5db":"#1f2937",color:"#fff",fontSize:15,fontWeight:600,cursor:sideLeft<=0?"not-allowed":"pointer"}},sideLeft<=0?"滿":"加"),
     ),
   );
 }
@@ -788,23 +788,23 @@ function LogPage() {
   return h("div",null,
     // 員工名單管理
     h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"hidden",marginBottom:16}},
-      h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:14}},"員工名單"),
+      h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:16}},"員工名單"),
       h("div",{style:{padding:"10px 14px",display:"flex",flexWrap:"wrap",gap:8,alignItems:"center"}},
-        staff.length===0?h("span",{style:{color:"#9ca3af",fontSize:13}},"尚無員工，請於下方新增"):null,
-        staff.map(n=>h("span",{key:n,style:{display:"inline-flex",alignItems:"center",gap:6,background:"#f1f5f9",borderRadius:8,padding:"4px 10px",fontSize:13,fontWeight:600}},
-          n, h("button",{onClick:()=>delStaff(n),style:{border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:13,padding:0}},"✕"))),
+        staff.length===0?h("span",{style:{color:"#9ca3af",fontSize:16}},"尚無員工，請於下方新增"):null,
+        staff.map(n=>h("span",{key:n,style:{display:"inline-flex",alignItems:"center",gap:6,background:"#f1f5f9",borderRadius:8,padding:"4px 10px",fontSize:16,fontWeight:600}},
+          n, h("button",{onClick:()=>delStaff(n),style:{border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:16,padding:0}},"✕"))),
       ),
       h("div",{style:{padding:"0 14px 12px",display:"flex",gap:8}},
-        h("input",{value:newName,placeholder:"新增員工姓名",onChange:(e)=>setNewName(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&addStaff(),style:{flex:1,maxWidth:200,padding:"6px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13}}),
-        h("button",{onClick:addStaff,style:{padding:"6px 16px",borderRadius:8,border:"none",background:"#1f2937",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}},"新增"),
+        h("input",{value:newName,placeholder:"新增員工姓名",onChange:(e)=>setNewName(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&addStaff(),style:{flex:1,maxWidth:200,padding:"6px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:16}}),
+        h("button",{onClick:addStaff,style:{padding:"6px 16px",borderRadius:8,border:"none",background:"#1f2937",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}},"新增"),
       ),
     ),
     // 異動紀錄
     h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"hidden"}},
-    h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:14,display:"flex",alignItems:"center"}},
-      "異動紀錄",h("span",{style:{marginLeft:"auto",fontSize:12,color:"#9ca3af",fontWeight:400}},`共 ${items.length} 筆 · 保留 60 天`)),
-    items.length===0?h("div",{style:{padding:24,textAlign:"center",color:"#9ca3af",fontSize:14}},"目前沒有紀錄"):
-    h("div",null, items.map((it,i)=>h("div",{key:i,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderBottom:"1px solid #f6f6f6",fontSize:13}},
+    h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:16,display:"flex",alignItems:"center"}},
+      "異動紀錄",h("span",{style:{marginLeft:"auto",fontSize:15,color:"#9ca3af",fontWeight:400}},`共 ${items.length} 筆 · 保留 60 天`)),
+    items.length===0?h("div",{style:{padding:24,textAlign:"center",color:"#9ca3af",fontSize:16}},"目前沒有紀錄"):
+    h("div",null, items.map((it,i)=>h("div",{key:i,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderBottom:"1px solid #f6f6f6",fontSize:16}},
       h("span",{style:{color:"#9ca3af",minWidth:78,fontVariantNumeric:"tabular-nums"}},fmt(it.t)),
       h("span",{style:{fontWeight:700,minWidth:48}},it.who||"—"),
       h("span",{style:{color:ACT_COLOR[it.act]||"#374151",fontWeight:600,minWidth:60}},it.act),
@@ -814,30 +814,30 @@ function LogPage() {
   ),
     // 封存名單（升期退場，留 30 天）
     h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"hidden",marginTop:16}},
-      h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:14,display:"flex",alignItems:"center"}},
-        "封存名單（升期退場）",h("span",{style:{marginLeft:"auto",fontSize:12,color:"#9ca3af",fontWeight:400}},"保留 30 天")),
+      h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #f0f0f0",fontWeight:700,fontSize:16,display:"flex",alignItems:"center"}},
+        "封存名單（升期退場）",h("span",{style:{marginLeft:"auto",fontSize:15,color:"#9ca3af",fontWeight:400}},"保留 30 天")),
       (!main||!main.archive||main.archive.length===0)
-        ? h("div",{style:{padding:24,textAlign:"center",color:"#9ca3af",fontSize:14}},"目前沒有封存名單")
+        ? h("div",{style:{padding:24,textAlign:"center",color:"#9ca3af",fontSize:16}},"目前沒有封存名單")
         : h("div",null, [...main.archive].sort((a,b)=>b.t-a.t).map((a,i)=>h("div",{key:i,style:{padding:"10px 14px",borderBottom:"1px solid #f6f6f6"}},
-            h("div",{style:{fontSize:13,fontWeight:700,marginBottom:4}},
+            h("div",{style:{fontSize:16,fontWeight:700,marginBottom:4}},
               `${a.cohort}`,
               h("span",{style:{fontWeight:400,color:"#9ca3af",marginLeft:8}},`${fmt(a.t)} · ${a.who||"—"} 升期 · 共 ${a.people.length} 位`)),
-            h("div",{style:{fontSize:12,color:"#6b7280",display:"flex",flexWrap:"wrap",gap:"2px 10px"}},
+            h("div",{style:{fontSize:15,color:"#6b7280",display:"flex",flexWrap:"wrap",gap:"2px 10px"}},
               a.people.map((pp,j)=>h("span",{key:j},`${pp.name}${pp.slot?`（${pp.slot}）`:""}`))),
           ))),
     ),
   );
 }
 
-const inS=(w)=>({width:w,padding:"5px 7px",borderRadius:6,border:"1px solid #d1d5db",fontSize:12});
-const copyDayBtn={marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:5,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600};
-const pasteDayBtn={marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:5,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700};
-const summerOffBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #fdba74",background:"#fff",color:"#c2410c",fontSize:12,fontWeight:700,cursor:"pointer"};
-const summerOnBtn={padding:"5px 12px",borderRadius:6,border:"none",background:"#f97316",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"};
-const printBtn=(c)=>({padding:"6px 10px",borderRadius:8,border:"1px solid "+c,background:"#fff",color:c,fontSize:13,fontWeight:700,cursor:"pointer"});
-const promoteBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #93c5fd",background:"#eff6ff",color:"#1d4ed8",fontSize:12,fontWeight:700,cursor:"pointer"};
-const cohortInput={width:64,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:13,fontWeight:600};
-const sideBtn=(a,color)=>({padding:"4px 10px",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,background:a?color:"#fff",color:a?"#fff":"#6b7280"});
+const inS=(w)=>({width:w,padding:"5px 7px",borderRadius:6,border:"1px solid #d1d5db",fontSize:15});
+const copyDayBtn={marginTop:4,fontSize:14,padding:"2px 8px",borderRadius:5,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600};
+const pasteDayBtn={marginTop:4,fontSize:14,padding:"2px 8px",borderRadius:5,border:"none",background:"#fde047",color:"#854d0e",cursor:"pointer",fontWeight:700};
+const summerOffBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #fdba74",background:"#fff",color:"#c2410c",fontSize:15,fontWeight:700,cursor:"pointer"};
+const summerOnBtn={padding:"5px 12px",borderRadius:6,border:"none",background:"#f97316",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"};
+const printBtn=(c)=>({padding:"6px 10px",borderRadius:8,border:"1px solid "+c,background:"#fff",color:c,fontSize:16,fontWeight:700,cursor:"pointer"});
+const promoteBtn={padding:"5px 12px",borderRadius:6,border:"1px solid #93c5fd",background:"#eff6ff",color:"#1d4ed8",fontSize:15,fontWeight:700,cursor:"pointer"};
+const cohortInput={width:64,padding:"4px 6px",borderRadius:6,border:"1px solid #d1d5db",fontSize:16,fontWeight:600};
+const sideBtn=(a,color)=>({padding:"4px 10px",border:"none",cursor:"pointer",fontSize:15,fontWeight:700,background:a?color:"#fff",color:a?"#fff":"#6b7280"});
 
 function Root(){
   const [ok,setOk]=useState(sessionStorage.getItem("counter_ok")==="1");
