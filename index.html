@@ -455,6 +455,7 @@ function Counter() {
     let pages="";
     // 一條線一頁，內含整週（週一到週日）
     for(const rid of routeOrder){
+      const hasStop = (rid==="zhonghe"); // 只有中和線有上車站
       let body="";
       for(const day of allDays){
         const dTab=(day===0||day===6)?"weekend":"weekday";
@@ -479,14 +480,14 @@ function Counter() {
           dayBody+='<tr><td class="grp" rowspan="'+people.length+'">'+esc(sl.time)+(sl.summer?'<br><span class="su">暑期</span>':'')+'</td>';
           people.forEach(function(p,i){
             if(i>0) dayBody+="<tr>";
-            dayBody+='<td>'+esc(labelName(p._s))+'</td><td class="nm">'+esc(p.name)+'</td><td>'+esc(p.phone||"")+'</td><td>'+esc(p.stop||"")+'</td><td>'+esc(p.note||"")+'</td><td class="sign"></td></tr>';
+            dayBody+='<td>'+esc(labelName(p._s))+'</td><td class="nm">'+esc(p.name)+'</td><td>'+esc(p.phone||"")+'</td>'+(hasStop?('<td>'+esc(p.stop||"")+'</td>'):'')+'<td>'+esc(p.note||"")+'</td><td class="sign"></td></tr>';
           });
         }
         if(dayCount===0) continue;
-        body+='<tr class="dayhdr"><td colspan="7">週'+DAY_NAME[day]+'</td></tr>'+dayBody;
+        body+='<tr class="dayhdr"><td colspan="'+(hasStop?7:6)+'">週'+DAY_NAME[day]+'</td></tr>'+dayBody;
       }
       if(!body) continue;
-      pages+='<div class="page"><h2>'+esc(ROUTE_NM[rid])+' 接駁名單　<span class="sub">'+numA+'A / '+numB+'B　整週</span></h2><table><thead><tr><th>時段</th><th>梯次</th><th>姓名</th><th>電話</th><th>上車站</th><th>備註</th><th>簽到</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+      pages+='<div class="page"><h2>'+esc(ROUTE_NM[rid])+' 接駁名單　<span class="sub">'+numA+'A / '+numB+'B　整週</span></h2><table><thead><tr><th>時段</th><th>梯次</th><th>姓名</th><th>電話</th>'+(hasStop?'<th>上車站</th>':'')+'<th>備註</th><th>簽到</th></tr></thead><tbody>'+body+'</tbody></table></div>';
     }
     if(!pages){ alert((onlyRid?ROUTE_NM[onlyRid]:"")+"目前沒有名單可列印。"); return; }
     const html='<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>接駁名單</title><style>'
