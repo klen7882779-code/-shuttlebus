@@ -1,6 +1,7 @@
 // ── 接駁車系統核心（櫃台頁與司機頁共用）────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion }
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion,
+  collection, addDoc, query, where, orderBy, getDocs, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import React, { useState, useEffect, useMemo } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
@@ -17,8 +18,9 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const DOC = doc(db, "shuttle", "main");
 const LOG = doc(db, "shuttle", "log");
+const BACKUP_COL = collection(db, "shuttle", "backup", "items"); // 每個關鍵操作前的完整快照，各自一個文件（避免單一文件超過 1MB 上限）
 export const h = React.createElement;
-export { useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion };
+export { useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, BACKUP_COL };
 
 // ── 異動紀錄：寫一筆 + 清掉 60 天前 ──────────────────
 const LOG_KEEP_MS = 60 * 24 * 60 * 60 * 1000; // 60 天
@@ -32,6 +34,26 @@ export async function writeLog(entry) {
     items = items.filter(x => now - x.t < LOG_KEEP_MS);
     await setDoc(LOG, { items });
   } catch (e) { console.error("log fail", e); }
+}
+
+// ── 備份：只在關鍵操作（升期／整天複製等）前，存一份完整快照，各自一個文件，保留 60 天 ──
+const BACKUP_KEEP_MS = 60 * 24 * 60 * 60 * 1000; // 60 天
+export async function writeBackup(snapshot, trigger, whoName) {
+  try {
+    await addDoc(BACKUP_COL, { t: Date.now(), trigger, who: whoName || "", snapshot });
+    // 順便清掉 60 天前的舊備份（每次備份時清一次，不需另外排程）
+    const cutoff = Date.now() - BACKUP_KEEP_MS;
+    const q = query(BACKUP_COL, where("t", "<", cutoff));
+    const olds = await getDocs(q);
+    await Promise.all(olds.docs.map(d => deleteDoc(d.ref)));
+  } catch (e) { console.error("backup fail", e); }
+}
+// 即時監聽全部備份（依時間新到舊排序）
+export function listBackups(cb) {
+  const q = query(BACKUP_COL, orderBy("t", "desc"));
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, (e) => { console.error(e); cb([]); });
 }
 
 
