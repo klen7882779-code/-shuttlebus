@@ -20,7 +20,7 @@
 
 <script type="module">
 import {
-  h, useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog,
+  h, useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
   tk, EMPTY, fmtPhone, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
 } from "./app-core.js";
@@ -228,8 +228,10 @@ function Counter() {
   function editMoto(which,k,id,fields){
     if(!requireOp())return;
     const store=mStore(which); const c=store[k]||{L:[]};
+    const old=c.L.find(x=>x.id===id);
     const next={...store,[k]:{L:c.L.map(x=> x.id!==id?x:{...x,name:fields.name.trim(),phone:(fields.phone||"").trim(),note:(fields.note||"").trim()})}};
     mSet(which,next);
+    writeLog({who:who(),act:mLabel(which)+"修改",slot:k.replace("moto_","週").replace("_"," "),name:`${old?old.name:""} → ${fields.name.trim()}`});
   }
   // 機車升為正期：新生整批疊加進正期對應時段，新生清空
   function promoteMoto(){
@@ -238,15 +240,19 @@ function Counter() {
     if(keys.length===0){ alert("機車新生班表目前沒有名單可升。"); return; }
     const total=keys.reduce((s,k)=>s+motoPrep[k].L.length,0);
     if(!confirm(`確定把「機車新生班表」共 ${total} 位整批升為正期嗎？\n（併入機車正期對應時段，正期原有補課生保留；升完新生班表會清空）`)) return;
+    // 備份：升期前存一份完整快照
+    writeBackup({ data, prep, moto, motoPrep, archive, staff }, "機車升為正期", who());
     const nextMoto={...moto};
+    let dupTotal=0;
     for(const k of keys){
       const cur=nextMoto[k]||{L:[]};
-      const add=motoPrep[k].L.map(p=>({...p,id:Date.now()+Math.floor(Math.random()*100000)}));
-      nextMoto[k]={L:[...cur.L,...add]};
+      const res=mergeMotoList(cur.L, motoPrep[k].L);
+      nextMoto[k]={L:res.list};
+      dupTotal+=res.duplicate;
     }
     setMoto(nextMoto); setMotoPrep({}); persist({moto:nextMoto,motoPrep:{}});
-    writeLog({who:who(),act:"機車升為正期",slot:"全部時段",name:total+"位"});
-    alert(`已將 ${total} 位機車新生升為正期，新生班表已清空。`);
+    writeLog({who:who(),act:"機車升為正期",slot:"全部時段",name:`${total}位${dupTotal?`（重複略過${dupTotal}）`:""}`});
+    alert(`已將 ${total} 位機車新生升為正期，新生班表已清空。${dupTotal?`（其中 ${dupTotal} 位因正期已有同姓名同電話的人，未重複新增）`:""}`);
   }
   // 機車複製：來源(整天/單班/單人) → 目標，疊加
   const [mclip,setMclip]=useState(null); // {which, mode:'cell'|'day'|'person', key?, day?, person?}
@@ -254,6 +260,16 @@ function Counter() {
   function mStartCopyDay(which,day){ setMclip({which,mode:"day",day}); }
   function mStartCopyPerson(which,key,person){ setMclip({which,mode:"person",key,person}); }
   function mCancelCopy(){ setMclip(null); }
+  // 將 people 疊加進機車某時段的 L 陣列，同姓名+電話的人略過不重複新增
+  function mergeMotoList(curL, people){
+    const out=[...curL]; let added=0, duplicate=0;
+    for(const p of people){
+      if(out.some(x=>samePerson(x,p))){ duplicate++; continue; }
+      out.push({...p,id:Date.now()+Math.floor(Math.random()*100000)});
+      added++;
+    }
+    return { list:out, added, duplicate };
+  }
   function mPasteCell(which,destKey){
     if(!mclip||!requireOp())return;
     const src=mStore(mclip.which);
@@ -263,28 +279,32 @@ function Counter() {
     else { alert("整天複製請點某天標題貼上。"); return; }
     if(people.length===0){ alert("來源沒有名單。"); mCancelCopy(); return; }
     const store=mStore(which); const cur=store[destKey]||{L:[]};
-    const add=people.map(p=>({...p,id:Date.now()+Math.floor(Math.random()*100000)}));
-    const next={...store,[destKey]:{L:[...cur.L,...add]}};
-    mSet(which,next); 
-    writeLog({who:who(),act:mLabel(which)+"複製",slot:destKey.replace("moto_","週").replace("_"," "),name:add.length+"位"});
+    const { list, added, duplicate } = mergeMotoList(cur.L, people);
+    const next={...store,[destKey]:{L:list}};
+    mSet(which,next);
+    writeLog({who:who(),act:mLabel(which)+"複製",slot:destKey.replace("moto_","週").replace("_"," "),name:`${added}位${duplicate?`（重複略過${duplicate}）`:""}`});
     mCancelCopy();
+    if(duplicate) alert(`${duplicate} 位已存在（同姓名同電話），未重複新增。`);
     if(next[destKey].L.length>MOTO_CAP) alert("貼上後此時段已超過 "+MOTO_CAP+" 位，請自行調整。");
   }
   function mPasteDay(which,destDay){
     if(!mclip||!requireOp())return;
     const src=mStore(mclip.which);
     const nextStore={...mStore(which)};
-    let cnt=0;
+    let cnt=0, dupTotal=0;
     if(mclip.mode==="day"){
       if(mclip.day===destDay){ alert("來源和目標同一天。"); return; }
       const srcKeys=Object.keys(src).filter(k=>{ const parts=k.split("_"); return Number(parts[1])===mclip.day && (src[k]||{L:[]}).L.length>0; });
       if(srcKeys.length===0){ alert("來源那天沒有名單。"); mCancelCopy(); return; }
+      // 備份：機車整天複製前存一份完整快照
+      writeBackup({ data, prep, moto, motoPrep, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
       for(const k of srcKeys){
         const parts=k.split("_"); const t=parts[2];
         const destKey=motoKey(destDay,t);
         const cur=nextStore[destKey]||{L:[]};
-        const add=src[k].L.map(p=>({...p,id:Date.now()+Math.floor(Math.random()*100000)+cnt++}));
-        nextStore[destKey]={L:[...cur.L,...add]};
+        const res=mergeMotoList(cur.L, src[k].L);
+        nextStore[destKey]={L:res.list};
+        cnt+=res.added; dupTotal+=res.duplicate;
       }
     } else {
       const parts=mclip.key.split("_"); const t=parts[2];
@@ -292,12 +312,14 @@ function Counter() {
       const people = mclip.mode==="person"?[mclip.person]:(src[mclip.key]||{L:[]}).L;
       if(people.length===0){ alert("來源沒有名單。"); mCancelCopy(); return; }
       const cur=nextStore[destKey]||{L:[]};
-      const add=people.map(p=>({...p,id:Date.now()+Math.floor(Math.random()*100000)+cnt++}));
-      nextStore[destKey]={L:[...cur.L,...add]};
+      const res=mergeMotoList(cur.L, people);
+      nextStore[destKey]={L:res.list};
+      cnt+=res.added; dupTotal+=res.duplicate;
     }
     mSet(which,nextStore);
-    writeLog({who:who(),act:mLabel(which)+"複製",slot:"→ 週"+destDay,name:cnt+"位"});
+    writeLog({who:who(),act:mLabel(which)+"複製",slot:"→ 週"+destDay,name:`${cnt}位${dupTotal?`（重複略過${dupTotal}）`:""}`});
     mCancelCopy();
+    if(dupTotal) alert(`已複製 ${cnt} 位，${dupTotal} 位已存在（同姓名同電話），未重複新增。`);
   }
 
   // ── 營運表操作 ──
@@ -358,6 +380,7 @@ function Counter() {
   function editPrep(k,side,id,fields){
     if(!requireOp())return;
     const c=prep[k]||EMPTY();
+    const old=c[side].find(x=>x.id===id);
     const updated=c[side].map(x=>{
       if(x.id!==id) return x;
       const nx={...x, name:fields.name.trim(), phone:(fields.phone||"").trim(), note:(fields.note||"").trim()};
@@ -366,6 +389,7 @@ function Counter() {
     });
     const next={...prep,[k]:{...c,[side]:updated}};
     setPrep(next);persist({prep:next});
+    writeLog({ who:who(), act:"預備修改", slot:slotDesc(k), side, name:`${old?old.name:""} → ${fields.name.trim()}` });
   }
 
   // ── 升期：把預備某欄整批搬入營運，舊欄封存退場 ──
@@ -395,6 +419,9 @@ function Counter() {
     // 統計搬移人數
     let moved=0; for(const k in prep){ moved+=(prep[k][side]||[]).length; }
     if(!confirm(`確定升期？\n「${oldName}」全部退場封存，「${newName}」${moved} 位升上車。`)) return;
+
+    // 備份：升期前存一份完整快照（data/prep/moto/motoPrep/archive/staff）
+    writeBackup({ data, prep, moto, motoPrep, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
 
     // 執行：營運該欄 <- 預備該欄；舊營運該欄 -> 封存
     const archivedPeople=[];
@@ -461,13 +488,20 @@ function Counter() {
     return np;
   }
 
-  // 將 srcCell 的人疊加進 destKey（防爆，回傳 {next, added, skipped}）
+  // 判斷是否為同一人（姓名+電話都相同才算，避免同名不同人誤判）
+  function samePerson(a,b){
+    return (a.name||"").trim()===(b.name||"").trim() && (a.phone||"").trim()===(b.phone||"").trim();
+  }
+
+  // 將 srcCell 的人疊加進 destKey（防爆＋防重複，回傳 {added, skipped, duplicate}）
   function mergeInto(destData, destKey, srcCell, destRouteId){
     const dc = destData[destKey] || EMPTY();
     const out = { A:[...dc.A], B:[...dc.B], R:[...dc.R] };
-    let added=0, skipped=0;
+    let added=0, skipped=0, duplicate=0;
     for(const side of ["A","B","R"]){
       for(const p of (srcCell[side]||[])){
+        const already = out.A.some(x=>samePerson(x,p)) || out.B.some(x=>samePerson(x,p)) || out.R.some(x=>samePerson(x,p));
+        if(already){ duplicate++; continue; }
         const total = out.A.length+out.B.length+out.R.length;
         if(total>=SEAT_CAP){ skipped++; continue; }
         out[side].push(adaptPerson(p, destRouteId));
@@ -475,7 +509,7 @@ function Counter() {
       }
     }
     destData[destKey]=out;
-    return { added, skipped };
+    return { added, skipped, duplicate };
   }
 
   function pasteToCell(destKey){
@@ -489,13 +523,13 @@ function Counter() {
     else { alert("整天複製請點目標『那一天的標題』貼上，不是貼到單一格。"); return; }
     const srcTotal = srcCell.A.length+srcCell.B.length+srcCell.R.length;
     if(srcTotal===0){ alert("來源沒有乘客。"); cancelCopy(); return; }
-    if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？\n（疊加，超過 ${SEAT_CAP} 位的會略過）`)) return;
+    if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？\n（疊加，超過 ${SEAT_CAP} 位的會略過；已存在同姓名同電話的人不會重複新增）`)) return;
     const next = page==="prep" ? {...prep} : {...data};
-    const { added, skipped } = mergeInto(next, destKey, srcCell, destRouteId);
+    const { added, skipped, duplicate } = mergeInto(next, destKey, srcCell, destRouteId);
     if(page==="prep"){ setPrep(next); persist({prep:next}); } else { setData(next); persist({data:next}); }
-    writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（略過${skipped}）`:""}` });
+    writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}` });
     cancelCopy();
-    alert(`已複製 ${added} 位${skipped?`，${skipped} 位因滿座略過`:""}。`);
+    alert(`已複製 ${added} 位${skipped?`，${skipped} 位因滿座略過`:""}${duplicate?`，${duplicate} 位已存在（同姓名同電話）未重複新增`:""}。`);
   }
 
   function pasteToDay(destDay){
@@ -503,7 +537,7 @@ function Counter() {
     if(!requireOp()){ return; }
     const srcData = clip.table==="prep" ? prep : data;
     const next = page==="prep" ? {...prep} : {...data};
-    let added=0, skipped=0, classes=0;
+    let added=0, skipped=0, duplicate=0, classes=0;
 
     if(clip.mode==="day"){
       if(clip.day===destDay){ alert("來源和目標是同一天。"); return; }
@@ -512,14 +546,16 @@ function Counter() {
       // 也包含來源那天「buildGrid 有班但還沒人」的就跳過（沒人不用搬）
       const realSrc = srcKeys.filter(k=>{ const c=srcData[k]; return c && (c.A.length+c.B.length+c.R.length)>0; });
       if(realSrc.length===0){ alert("來源那天沒有任何乘客。"); cancelCopy(); return; }
-      if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過）`)) return;
+      if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）`)) return;
+      // 備份：大量複製（整天）前存一份完整快照
+      writeBackup({ data, prep, moto, motoPrep, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
       for(const k of realSrc){
         const [r,,t]=k.split("_");
         const destKey = tk(r,destDay,t);
         const res = mergeInto(next, destKey, srcData[k], r);
-        added+=res.added; skipped+=res.skipped; classes++;
+        added+=res.added; skipped+=res.skipped; duplicate+=res.duplicate; classes++;
       }
-      writeLog({ who:who(), act:"複製整天", slot:`週${DAY_NAME[clip.day]} → 週${DAY_NAME[destDay]}`, name:`${classes}班 ${added}位${skipped?`（略過${skipped}）`:""}` });
+      writeLog({ who:who(), act:"複製整天", slot:`週${DAY_NAME[clip.day]} → 週${DAY_NAME[destDay]}`, name:`${classes}班 ${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}` });
     } else {
       // 單班/單人來源，貼到某天 → 該天「同路線同時段」那班
       const [r,,t]=clip.key.split("_");
@@ -531,12 +567,12 @@ function Counter() {
       const srcTotal=srcCell.A.length+srcCell.B.length+srcCell.R.length;
       if(srcTotal===0){ alert("來源沒有乘客。"); cancelCopy(); return; }
       if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？`)) return;
-      const res=mergeInto(next, destKey, srcCell, r); added=res.added; skipped=res.skipped;
-      writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（略過${skipped}）`:""}` });
+      const res=mergeInto(next, destKey, srcCell, r); added=res.added; skipped=res.skipped; duplicate=res.duplicate;
+      writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}` });
     }
     if(page==="prep"){ setPrep(next); persist({prep:next}); } else { setData(next); persist({data:next}); }
     cancelCopy();
-    alert(`已複製 ${added} 位${skipped?`，${skipped} 位因滿座略過`:""}。`);
+    alert(`已複製 ${added} 位${skipped?`，${skipped} 位因滿座略過`:""}${duplicate?`，${duplicate} 位已存在（同姓名同電話）未重複新增`:""}。`);
   }
 
   const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
@@ -899,6 +935,7 @@ function HelpBox({ showHelp, setShowHelp }){
       item("暑期加開：平日工具列按「☀暑期加開」，平日表會多出 09:30（→12:30回）與 13:00（→16:00回）兩個時段（三線比照原出車日），暑期結束點同一鈕關閉即收起，資料保留。"),
       item("司機請改用司機專頁（driver.html）查看當天名單，該頁唯讀、會即時更新。"),
       item("升期退場的舊名單會封存於「異動紀錄」頁（需管理密碼），保留 30 天可查詢。"),
+      item("升期、機車升期、整天複製等大量異動前，系統會自動存一份完整備份（保留 60 天），萬一誤操作可在「異動紀錄」頁的「備份還原」區塊還原，需管理密碼。"),
       item("所有資料即時雲端同步，多台裝置同時開都會同步；右上角顯示「● 已同步」即表示儲存成功。"),
     ) : null,
   );
@@ -969,6 +1006,8 @@ function LogPage() {
   const [staff,setStaff]=useState([]);
   const [main,setMain]=useState(null); // 保留 main 其餘欄位以免覆寫
   const [newName,setNewName]=useState("");
+  const [backups,setBackups]=useState(null);
+  const [restoring,setRestoring]=useState(false);
 
   useEffect(()=>{
     if(!ok)return;
@@ -980,12 +1019,21 @@ function LogPage() {
       const v=snap.data()||{};
       setMain(v); setStaff(v.staff||[]);
     },(e)=>{console.error(e);});
-    return ()=>{u1();u2();};
+    const u3=listBackups(setBackups);
+    return ()=>{u1();u2();u3();};
   },[ok]);
 
   async function saveStaff(list){
     const base = main || {};
-    await setDoc(DOC, { ...base, staff: list, updatedAt: Date.now() });
+    const num = (v, d)=> typeof v==="number" ? v : d;
+    // 只寫白名單欄位，避免 main 混入非白名單欄位導致寫入被規則擋下
+    await setDoc(DOC, {
+      data: base.data||{}, prep: base.prep||{}, moto: base.moto||{}, motoPrep: base.motoPrep||{},
+      numA: num(base.numA,459), numB: num(base.numB,458),
+      prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
+      archive: base.archive||[], staff: list, summer: !!base.summer,
+      updatedAt: Date.now(),
+    });
   }
   function addStaff(){
     const n=newName.trim();
@@ -996,11 +1044,51 @@ function LogPage() {
     const list=staff.filter(x=>x!==n); setStaff(list); saveStaff(list);
   }
 
+  // 還原：用選定的備份快照，整包覆蓋 data/prep/moto/motoPrep/archive/staff
+  // （梯次期數 numA/numB/prepNumA/prepNumB 與暑期設定 summer 不受影響）
+  async function restoreBackup(b){
+    const when = fmt(b.t);
+    if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車正期、機車新生、封存名單、員工名單。\n（不影響梯次期數與暑期開關）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
+    setRestoring(true);
+    try{
+      // 還原前，先把目前狀態存一份備份（保險）
+      const cur = main || {};
+      await writeBackup(
+        { data:cur.data||{}, prep:cur.prep||{}, moto:cur.moto||{}, motoPrep:cur.motoPrep||{}, archive:cur.archive||[], staff:cur.staff||[] },
+        "還原前自動備份", "系統"
+      );
+      const s = b.snapshot||{};
+      const base = main || {};
+      // 只挑 firestore.rules 白名單內的欄位重建，避免 main 混入非白名單欄位導致寫入被規則擋下
+      const num = (v, d)=> typeof v==="number" ? v : d;
+      const patch = {
+        // 名單類：用備份快照覆蓋
+        data: s.data||{}, prep: s.prep||{}, moto: s.moto||{}, motoPrep: s.motoPrep||{},
+        archive: s.archive||[], staff: s.staff||[],
+        // 期數／暑期：沿用目前值（備份不含這些，維持現況）
+        numA: num(base.numA,459), numB: num(base.numB,458),
+        prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
+        summer: !!base.summer,
+        updatedAt: Date.now(),
+      };
+      await setDoc(DOC, patch);
+      writeLog({ who:"管理員", act:"還原備份", slot:b.trigger, name:when });
+      alert("已還原完成。");
+    } catch(e){ console.error(e); alert("還原失敗，請檢查網路後再試一次。"); }
+    setRestoring(false);
+  }
+
   if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
   if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
 
-  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","改梯次名":"#7c3aed","清空梯次":"#dc2626","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626" };
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","清空梯次":"#dc2626","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
   const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  // 快照人數統計（給備份卡片顯示用）
+  function snapCount(store, isMoto){
+    let n=0;
+    for(const k in store||{}){ const c=store[k]; n += isMoto ? (c.L||[]).length : (c.A||[]).length+(c.B||[]).length+(c.R||[]).length; }
+    return n;
+  }
 
   return h("div",null,
     // 員工名單管理
@@ -1015,6 +1103,22 @@ function LogPage() {
         h("input",{value:newName,placeholder:"新增員工姓名",onChange:(e)=>setNewName(e.target.value),onKeyDown:(e)=>e.key==="Enter"&&addStaff(),style:{flex:1,maxWidth:200,padding:"6px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:16}}),
         h("button",{onClick:addStaff,style:{padding:"6px 16px",borderRadius:8,border:"none",background:"#1f2937",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}},"新增"),
       ),
+    ),
+    // 備份還原
+    h("div",{style:{border:"1px solid #fecaca",borderRadius:12,background:"#fff",overflow:"hidden",marginBottom:16}},
+      h("div",{style:{padding:"10px 14px",borderBottom:"1px solid #fee2e2",fontWeight:700,fontSize:16,display:"flex",alignItems:"center",background:"#fef2f2"}},
+        "備份還原",h("span",{style:{marginLeft:"auto",fontSize:15,color:"#9ca3af",fontWeight:400}},backups===null?"讀取中…":`共 ${backups.length} 份 · 保留 60 天`)),
+      h("div",{style:{padding:"8px 14px",fontSize:14,color:"#9ca3af"}},"只在升期、機車升期、整天複製等大量異動前自動存一份完整快照（營運表／預備表／機車正期／機車新生／封存名單／員工名單）。"),
+      backups===null ? h("div",{style:{padding:24,textAlign:"center"}},h("div",{className:"spin",style:{margin:"0 auto"}})) :
+      backups.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"#9ca3af",fontSize:16}},"目前沒有備份") :
+      h("div",null, backups.map(b=>h("div",{key:b.id,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderBottom:"1px solid #f6f6f6",fontSize:15,flexWrap:"wrap"}},
+        h("span",{style:{color:"#9ca3af",minWidth:78,fontVariantNumeric:"tabular-nums"}},fmt(b.t)),
+        h("span",{style:{fontWeight:700}},b.trigger),
+        h("span",{style:{color:"#6b7280"}},b.who?`（${b.who}）`:""),
+        h("span",{style:{color:"#94a3b8",fontSize:13}},
+          `營運${snapCount(b.snapshot&&b.snapshot.data)}位 · 預備${snapCount(b.snapshot&&b.snapshot.prep)}位 · 機車正期${snapCount(b.snapshot&&b.snapshot.moto,true)}位 · 機車新生${snapCount(b.snapshot&&b.snapshot.motoPrep,true)}位`),
+        h("button",{onClick:()=>restoreBackup(b),disabled:restoring,style:{marginLeft:"auto",border:"none",background:restoring?"#fca5a5":"#dc2626",color:"#fff",borderRadius:6,padding:"4px 12px",fontSize:14,fontWeight:700,cursor:restoring?"not-allowed":"pointer"}},restoring?"還原中…":"還原此份"),
+      ))),
     ),
     // 異動紀錄
     h("div",{style:{border:"1px solid #e5e7eb",borderRadius:12,background:"#fff",overflow:"hidden"}},
