@@ -437,8 +437,8 @@ function renderWeekSeg(){
   if (curVehicle !== "moto"){ seg.style.display="none"; return; }
   seg.style.display="";
   pruneWeeks();
-  const firstWeek = data.moto.weeks[0];
-  if (!curWeekId || !data.moto.weeks.find(w=>w.id===curWeekId)) curWeekId = firstWeek.id;
+  const lastWeek = data.moto.weeks[data.moto.weeks.length - 1];
+  if (!curWeekId || !data.moto.weeks.find(w=>w.id===curWeekId)) curWeekId = lastWeek.id;
   data.moto.weeks.forEach(w => {
     const b = document.createElement("button");
     b.textContent = w.name;
