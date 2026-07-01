@@ -20,7 +20,7 @@
 import {
   h, useState, useEffect, useMemo, createRoot, DOC, onSnapshot,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
-  tk, EMPTY, buildGrid, dot, tabGroup, tabBtn
+  tk, EMPTY, buildGrid, buildMotoGrid, MOTO_DAYS, MOTO_CAP, motoKey, dot, tabGroup, tabBtn
 } from "./app-core.js";
 
 function todayTab(){ const d=new Date().getDay(); return (d===0||d===6)?"weekend":"weekday"; }
@@ -35,6 +35,7 @@ function Driver() {
   const [summer, setSummer] = useState(false);
   const [numB, setNumB] = useState(458);
   const [data, setData] = useState({});
+  const [moto, setMoto] = useState({});
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -42,6 +43,7 @@ function Driver() {
       const v=snap.data();
       if(v){
         setData(v.data||{});
+        setMoto(v.moto||{});
         setSummer(!!v.summer);
         if(typeof v.numA==="number")setNumA(v.numA);
         if(typeof v.numB==="number")setNumB(v.numB);
@@ -90,11 +92,44 @@ function Driver() {
     ),
     // 路線切換
     h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},
-      [{id:"all",name:"全部",color:"#475569"},...ROUTES].map(r=>{
+      [{id:"all",name:"全部",color:"#475569"},...ROUTES,{id:"moto",name:"機車班",color:"#7c3aed"}].map(r=>{
         const sel=r.id===selRoute;
         return h("button",{key:r.id,onClick:()=>setSelRoute(r.id),style:{padding:"8px 16px",borderRadius:10,border:sel?"none":"1px solid #e5e7eb",background:sel?(r.color):"#fff",color:sel?"#fff":r.color,fontSize:15,fontWeight:800,cursor:"pointer"}},r.name);
       }),
     ),
+    // 機車班檢視（選「機車班」時顯示；跟汽車線分開）
+    selRoute==="moto" ? shownDays.map(day=>{
+      if(!MOTO_DAYS.includes(day)) return null;
+      const isToday=day===todayDay;
+      const buildMoto=buildMotoGrid();
+      const rows=buildMoto.map(row=>{
+        const dd=row.days.find(x=>x.day===day);
+        if(!dd) return null;
+        return { time:row.slot.time, label:row.slot.label };
+      }).filter(Boolean);
+      if(rows.length===0) return null;
+      return h("div",{key:"moto"+day,style:{marginBottom:18,border:isToday?"2px solid #7c3aed":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
+        h("div",{style:{padding:"10px 14px",background:isToday?"#f5f3ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
+          "週"+DAY_NAME[day]+"　機車班", isToday?h("span",{style:{fontSize:11,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
+        rows.map(r=>{
+          const key=motoKey(day,r.time);
+          const list=(moto[key]||{L:[]}).L; const over=list.length>MOTO_CAP;
+          return h("div",{key:r.time,style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9"}},
+            h("div",{style:{display:"flex",alignItems:"baseline",gap:8,marginBottom:8,paddingBottom:4,borderBottom:"2px solid #e2e8f0"}},
+              h("span",{style:{fontSize:24,fontWeight:900,color:"#6d28d9"}},r.time),
+              h("span",{style:{fontSize:14,color:"#94a3b8"}},r.label),
+              h("span",{style:{marginLeft:"auto",fontSize:16,fontWeight:800,color:over?"#dc2626":"#059669"}},list.length+"/"+MOTO_CAP+(over?" 超額!":"")),
+            ),
+            list.length===0 ? h("div",{style:{color:"#cbd5e1",fontSize:14}},"（無登記）")
+              : list.map(p=>h("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:8,fontSize:17,padding:"4px 0",borderBottom:"1px solid #f6f6f6"}},
+                  h("span",{style:{fontWeight:600}},p.name),
+                  p.phone?h("a",{href:"tel:"+p.phone.replace(/-/g,""),style:{marginLeft:"auto",fontSize:15,color:"#2563eb",textDecoration:"none"}},p.phone):null,
+                  p.note?h("span",{style:{fontSize:14,color:"#0891b2"}},p.note):null,
+                )),
+          );
+        }),
+      );
+    }) :
     shownDays.map(day=>{
       const isToday = day===todayDay;
       const slotRows = grid.map(row=>{
