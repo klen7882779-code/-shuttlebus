@@ -106,7 +106,7 @@ export const MOTO_CAP = 10;
 export const MOTO_DAYS = [1,2,4,5]; // 週一二四五
 export const MOTO_SLOTS = [
   { time:"08:00", back:"11:00", label:"第1梯 08:30-10:30" },
-  { time:"13:30", back:"16:30", label:"第2梯 14:00-16:00" },
+  { time:"15:30", back:"18:30", label:"第2梯 16:00-18:00" },
   { time:"18:30", back:"21:30", label:"第3梯 19:00-21:00" },
 ];
 export const motoKey = (day,time)=>`moto_${day}_${time}`;
