@@ -125,7 +125,7 @@ export function buildGrid(tab, summer) {
 
 // ── 機車班（獨立：一台自己的車，10位，不分A/B，一週一梯）──
 export const MOTO_CAP = 10;
-export const MOTO_DAYS = [1,2,4,5]; // 週一二四五
+export const MOTO_DAYS = [2,3,4,5]; // 週二三四五（原週一已停接駁，改為週三）
 export const MOTO_SLOTS = [
   { time:"08:00", back:"11:00", label:"第1梯 08:30-10:30" },
   { time:"15:30", back:"18:30", label:"第2梯 16:00-18:00" },
