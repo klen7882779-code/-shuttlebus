@@ -38,15 +38,34 @@ export async function writeLog(entry) {
 
 // ── 備份：只在關鍵操作（升期／整天複製等）前，存一份完整快照，各自一個文件，保留 60 天 ──
 const BACKUP_KEEP_MS = 60 * 24 * 60 * 60 * 1000; // 60 天
+// 深度清除 undefined（Firestore 不接受 undefined，會導致整包寫入失敗）
+function sanitize(obj){ return JSON.parse(JSON.stringify(obj ?? null)); }
 export async function writeBackup(snapshot, trigger, whoName) {
+  let clean;
   try {
-    await addDoc(BACKUP_COL, { t: Date.now(), trigger, who: whoName || "", snapshot });
-    // 順便清掉 60 天前的舊備份（每次備份時清一次，不需另外排程）
+    // 先清掉 undefined 並驗證可序列化；失敗就別讓後續大量操作繼續（回傳 false 讓呼叫端擋下）
+    clean = sanitize({
+      data: snapshot.data || {}, prep: snapshot.prep || {},
+      moto: snapshot.moto || {}, motoPrep: snapshot.motoPrep || {},
+      archive: snapshot.archive || [], staff: snapshot.staff || [],
+    });
+  } catch (e) {
+    console.error("backup sanitize fail", e);
+    return false; // 快照本身有問題，寧可不做這次危險操作
+  }
+  try {
+    await addDoc(BACKUP_COL, { t: Date.now(), trigger: String(trigger||""), who: String(whoName||""), snapshot: clean });
+  } catch (e) {
+    console.error("backup write fail", e);
+    return false; // 備份沒存成功，呼叫端應中止升期／複製等破壞性操作
+  }
+  // 清理 60 天前舊備份：與備份成敗無關，清理失敗只記錄、不影響已存好的備份
+  try {
     const cutoff = Date.now() - BACKUP_KEEP_MS;
-    const q = query(BACKUP_COL, where("t", "<", cutoff));
-    const olds = await getDocs(q);
+    const olds = await getDocs(query(BACKUP_COL, where("t", "<", cutoff)));
     await Promise.all(olds.docs.map(d => deleteDoc(d.ref)));
-  } catch (e) { console.error("backup fail", e); }
+  } catch (e) { console.error("backup cleanup fail (ignored)", e); }
+  return true;
 }
 // 即時監聽全部備份（依時間新到舊排序）
 export function listBackups(cb) {
