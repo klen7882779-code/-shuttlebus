@@ -97,39 +97,8 @@ function Driver() {
         return h("button",{key:r.id,onClick:()=>setSelRoute(r.id),style:{padding:"8px 16px",borderRadius:10,border:sel?"none":"1px solid #e5e7eb",background:sel?(r.color):"#fff",color:sel?"#fff":r.color,fontSize:15,fontWeight:800,cursor:"pointer"}},r.name);
       }),
     ),
-    // 機車班檢視（選「機車班」時顯示；跟汽車線分開）
-    selRoute==="moto" ? shownDays.map(day=>{
-      if(!MOTO_DAYS.includes(day)) return null;
-      const isToday=day===todayDay;
-      const buildMoto=buildMotoGrid();
-      const rows=buildMoto.map(row=>{
-        const dd=row.days.find(x=>x.day===day);
-        if(!dd) return null;
-        return { time:row.slot.time, label:row.slot.label };
-      }).filter(Boolean);
-      if(rows.length===0) return null;
-      return h("div",{key:"moto"+day,style:{marginBottom:18,border:isToday?"2px solid #7c3aed":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
-        h("div",{style:{padding:"10px 14px",background:isToday?"#f5f3ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
-          "週"+DAY_NAME[day]+"　機車班", isToday?h("span",{style:{fontSize:11,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
-        rows.map(r=>{
-          const key=motoKey(day,r.time);
-          const list=(moto[key]||{L:[]}).L; const over=list.length>MOTO_CAP;
-          return h("div",{key:r.time,style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9"}},
-            h("div",{style:{display:"flex",alignItems:"baseline",gap:8,marginBottom:8,paddingBottom:4,borderBottom:"2px solid #e2e8f0"}},
-              h("span",{style:{fontSize:24,fontWeight:900,color:"#6d28d9"}},r.time),
-              h("span",{style:{fontSize:14,color:"#94a3b8"}},r.label),
-              h("span",{style:{marginLeft:"auto",fontSize:16,fontWeight:800,color:over?"#dc2626":"#059669"}},list.length+"/"+MOTO_CAP+(over?" 超額!":"")),
-            ),
-            list.length===0 ? h("div",{style:{color:"#cbd5e1",fontSize:14}},"（無登記）")
-              : list.map(p=>h("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:8,fontSize:17,padding:"4px 0",borderBottom:"1px solid #f6f6f6"}},
-                  h("span",{style:{fontWeight:600}},p.name),
-                  p.phone?h("a",{href:"tel:"+p.phone.replace(/-/g,""),style:{marginLeft:"auto",fontSize:15,color:"#2563eb",textDecoration:"none"}},p.phone):null,
-                  p.note?h("span",{style:{fontSize:14,color:"#0891b2"}},p.note):null,
-                )),
-          );
-        }),
-      );
-    }) :
+    // 機車班檢視（選「機車班」或「全部」時顯示）
+    selRoute==="moto" ? shownDays.map(day=>renderMoto(day)) :
     shownDays.map(day=>{
       const isToday = day===todayDay;
       const slotRows = grid.map(row=>{
@@ -140,8 +109,11 @@ function Driver() {
         if(routes.length===0) return null;
         return { time: row.slot.time, label: row.slot.label, summer: row.slot.summer, routes };
       }).filter(Boolean);
-      if(slotRows.length===0) return null;
-      return h("div",{key:day,style:{marginBottom:18,border:isToday?"2px solid #2563eb":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
+      // 「全部」時，這天若有機車班，接在汽車班後面一起顯示
+      const motoBlock = selRoute==="all" ? renderMoto(day) : null;
+      if(slotRows.length===0 && !motoBlock) return null;
+      return h("div",{key:day,style:{marginBottom:18}},
+        slotRows.length>0 ? h("div",{style:{border:isToday?"2px solid #2563eb":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff",marginBottom:motoBlock?12:0}},
         h("div",{style:{padding:"10px 14px",background:isToday?"#eff6ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
           "週"+DAY_NAME[day], isToday?h("span",{style:{fontSize:11,background:"#2563eb",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
         slotRows.map(sr=>h("div",{key:sr.time,style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9",background:sr.summer?"#fff7ed":"transparent"}},
@@ -171,10 +143,46 @@ function Driver() {
             );
           })
         )),
+      ) : null,
+      motoBlock,
       );
     }),
     h("p",{style:{fontSize:12,color:"#9ca3af",marginTop:8}},"此頁即時更新，櫃台登記後自動出現。點電話可直接撥號。"),
   );
+
+  // 機車班一天的區塊（「機車班」與「全部」共用）；該天無機車時段則回傳 null
+  function renderMoto(day){
+    if(!MOTO_DAYS.includes(day)) return null;
+    const isToday=day===todayDay;
+    const buildMoto=buildMotoGrid();
+    const rows=buildMoto.map(row=>{
+      const dd=row.days.find(x=>x.day===day);
+      if(!dd) return null;
+      return { time:row.slot.time, label:row.slot.label };
+    }).filter(Boolean);
+    if(rows.length===0) return null;
+    return h("div",{key:"moto"+day,style:{border:isToday?"2px solid #7c3aed":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
+      h("div",{style:{padding:"10px 14px",background:isToday?"#f5f3ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
+        "週"+DAY_NAME[day]+"　機車班", isToday?h("span",{style:{fontSize:11,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
+      rows.map(r=>{
+        const key=motoKey(day,r.time);
+        const list=(moto[key]||{L:[]}).L; const over=list.length>MOTO_CAP;
+        return h("div",{key:r.time,style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9"}},
+          h("div",{style:{display:"flex",alignItems:"baseline",gap:8,marginBottom:8,paddingBottom:4,borderBottom:"2px solid #e2e8f0"}},
+            h("span",{style:{fontSize:24,fontWeight:900,color:"#6d28d9"}},r.time),
+            h("span",{style:{fontSize:14,color:"#94a3b8"}},r.label),
+            h("span",{style:{marginLeft:"auto",fontSize:16,fontWeight:800,color:over?"#dc2626":"#059669"}},list.length+"/"+MOTO_CAP+(over?" 超額!":"")),
+          ),
+          list.length===0 ? h("div",{style:{color:"#cbd5e1",fontSize:14}},"（無登記）")
+            : list.map(p=>h("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:8,fontSize:17,padding:"4px 0",borderBottom:"1px solid #f6f6f6"}},
+                h("span",{style:{fontWeight:600}},p.name),
+                p.phone?h("a",{href:"tel:"+p.phone.replace(/-/g,""),style:{marginLeft:"auto",fontSize:15,color:"#2563eb",textDecoration:"none"}},p.phone):null,
+                p.note?h("span",{style:{fontSize:14,color:"#0891b2"}},p.note):null,
+              )),
+        );
+      }),
+    );
+  }
 
   function tag(side,label){
     return h("span",{style:{display:"inline-flex",alignItems:"center",gap:4,background:TAG_BG[side],color:TAG_FG[side],borderRadius:6,padding:"3px 8px",fontWeight:700}},
