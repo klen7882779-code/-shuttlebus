@@ -729,7 +729,7 @@ function Counter() {
 // ── 週表元件（營運表與預備表共用）──
 function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, mclip, mStartCopyCell, mStartCopyDay, mStartCopyPerson, mPasteCell, mPasteDay, mCancelCopy, promoteMoto }){
   const grid = buildMotoGrid();
-  const DN={1:"一",2:"二",4:"四",5:"五"};
+  const DN=DAY_NAME;
   const isPrep = which==="motoPrep";
   const accent = isPrep ? "#0891b2" : "#7c3aed";
   const copying = !!mclip;
