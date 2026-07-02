@@ -234,14 +234,15 @@ function Counter() {
     writeLog({who:who(),act:mLabel(which)+"修改",slot:k.replace("moto_","週").replace("_"," "),name:`${old?old.name:""} → ${fields.name.trim()}`});
   }
   // 機車升為正期：新生整批疊加進正期對應時段，新生清空
-  function promoteMoto(){
+  async function promoteMoto(){
     if(!requireOp())return;
     const keys=Object.keys(motoPrep).filter(k=>(motoPrep[k]||{L:[]}).L.length>0);
     if(keys.length===0){ alert("機車新生班表目前沒有名單可升。"); return; }
     const total=keys.reduce((s,k)=>s+motoPrep[k].L.length,0);
     if(!confirm(`確定把「機車新生班表」共 ${total} 位整批升為正期嗎？\n（併入機車正期對應時段，正期原有補課生保留；升完新生班表會清空）`)) return;
-    // 備份：升期前存一份完整快照
-    writeBackup({ data, prep, moto, motoPrep, archive, staff }, "機車升為正期", who());
+    // 備份：升期前存一份完整快照；備份沒成功就中止
+    const ok = await writeBackup({ data, prep, moto, motoPrep, archive, staff }, "機車升為正期", who());
+    if(!ok){ alert("備份失敗，為避免資料遺失已中止升期。請檢查網路後再試一次。"); return; }
     const nextMoto={...moto};
     let dupTotal=0;
     for(const k of keys){
@@ -287,7 +288,7 @@ function Counter() {
     if(duplicate) alert(`${duplicate} 位已存在（同姓名同電話），未重複新增。`);
     if(next[destKey].L.length>MOTO_CAP) alert("貼上後此時段已超過 "+MOTO_CAP+" 位，請自行調整。");
   }
-  function mPasteDay(which,destDay){
+  async function mPasteDay(which,destDay){
     if(!mclip||!requireOp())return;
     const src=mStore(mclip.which);
     const nextStore={...mStore(which)};
@@ -297,7 +298,8 @@ function Counter() {
       const srcKeys=Object.keys(src).filter(k=>{ const parts=k.split("_"); return Number(parts[1])===mclip.day && (src[k]||{L:[]}).L.length>0; });
       if(srcKeys.length===0){ alert("來源那天沒有名單。"); mCancelCopy(); return; }
       // 備份：機車整天複製前存一份完整快照
-      writeBackup({ data, prep, moto, motoPrep, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
+      const bk = await writeBackup({ data, prep, moto, motoPrep, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
+      if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of srcKeys){
         const parts=k.split("_"); const t=parts[2];
         const destKey=motoKey(destDay,t);
@@ -393,7 +395,7 @@ function Counter() {
   }
 
   // ── 升期：把預備某欄整批搬入營運，舊欄封存退場 ──
-  function promote(side){
+  async function promote(side){
     if(!requireOp()) return;
     const oldName = side==="A"?nameA():nameB();
     const newNum  = side==="A"?prepNumA:prepNumB;
@@ -420,8 +422,9 @@ function Counter() {
     let moved=0; for(const k in prep){ moved+=(prep[k][side]||[]).length; }
     if(!confirm(`確定升期？\n「${oldName}」全部退場封存，「${newName}」${moved} 位升上車。`)) return;
 
-    // 備份：升期前存一份完整快照（data/prep/moto/motoPrep/archive/staff）
-    writeBackup({ data, prep, moto, motoPrep, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
+    // 備份：升期前存一份完整快照（data/prep/moto/motoPrep/archive/staff）；備份沒成功就中止，絕不硬做
+    const ok = await writeBackup({ data, prep, moto, motoPrep, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
+    if(!ok){ alert("備份失敗，為避免資料遺失已中止升期。請檢查網路後再試一次。"); return; }
 
     // 執行：營運該欄 <- 預備該欄；舊營運該欄 -> 封存
     const archivedPeople=[];
@@ -532,7 +535,7 @@ function Counter() {
     alert(`已複製 ${added} 位${skipped?`，${skipped} 位因滿座略過`:""}${duplicate?`，${duplicate} 位已存在（同姓名同電話）未重複新增`:""}。`);
   }
 
-  function pasteToDay(destDay){
+  async function pasteToDay(destDay){
     if(!clip) return;
     if(!requireOp()){ return; }
     const srcData = clip.table==="prep" ? prep : data;
@@ -548,7 +551,8 @@ function Counter() {
       if(realSrc.length===0){ alert("來源那天沒有任何乘客。"); cancelCopy(); return; }
       if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）`)) return;
       // 備份：大量複製（整天）前存一份完整快照
-      writeBackup({ data, prep, moto, motoPrep, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
+      const bk = await writeBackup({ data, prep, moto, motoPrep, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
+      if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of realSrc){
         const [r,,t]=k.split("_");
         const destKey = tk(r,destDay,t);
@@ -1051,12 +1055,13 @@ function LogPage() {
     if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車正期、機車新生、封存名單、員工名單。\n（不影響梯次期數與暑期開關）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
     setRestoring(true);
     try{
-      // 還原前，先把目前狀態存一份備份（保險）
+      // 還原前，先把目前狀態存一份備份（保險）；這份沒存成就不能還原，否則還原錯了救不回來
       const cur = main || {};
-      await writeBackup(
+      const safeOk = await writeBackup(
         { data:cur.data||{}, prep:cur.prep||{}, moto:cur.moto||{}, motoPrep:cur.motoPrep||{}, archive:cur.archive||[], staff:cur.staff||[] },
         "還原前自動備份", "系統"
       );
+      if(!safeOk){ alert("無法先備份目前狀態，為安全起見已中止還原。請檢查網路後再試一次。"); setRestoring(false); return; }
       const s = b.snapshot||{};
       const base = main || {};
       // 只挑 firestore.rules 白名單內的欄位重建，避免 main 混入非白名單欄位導致寫入被規則擋下
