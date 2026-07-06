@@ -678,7 +678,7 @@ function Counter() {
     page==="motoPrep" ? h(MotoTable,{which:"motoPrep",store:motoPrep,mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,promoteMoto}) :
     page==="prep" ? h("div",null,
       h("div",{style:{border:"1px solid #fde68a",background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:16,color:"#92400e"}},
-        "這是下期招生的預備名單，不佔營運車位。每班「剩 N」= 10 − 升期後仍留車上的對向梯次人數，填滿就無法再加（避免升期爆位）。等該梯開課，到「班表」頁按升期搬上車。"),
+        "這是下期招生的預備名單，不佔營運車位。每班「剩 N」= 10 − 升期後仍留車上的對向梯次人數，填滿就無法再加（避免升期爆位）。等該梯開課，按本頁右上方「升A／升B」把該梯搬上車。"),
       h("div", { style:{ display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap",fontSize:16 } },
         h("div", { style:tabGroup },
           h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日 一～五"),
@@ -689,6 +689,9 @@ function Counter() {
         h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:prepNumB,onSave:(v)=>setNum("PB",v)}),"B"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
         h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
+        h("span",{style:{flex:1}}),
+        h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A：${nameA()} → ${prepNameA()}`),
+        h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B：${nameB()} → ${prepNameB()}`),
       ),
       h(RouteFilter,{selRoute,setSelRoute}),
       h(WeekTable,{
@@ -712,9 +715,6 @@ function Counter() {
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考/機車"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
         h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
-        h("span",{style:{flex:1}}),
-        h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A → ${prepNameA()}`),
-        h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B → ${prepNameB()}`),
       ),
       h(RouteFilter,{selRoute,setSelRoute}),
       h(WeekTable,{
@@ -725,7 +725,7 @@ function Counter() {
         addP,removeP,editP,labelOf,
         clip, startCopyCell, startCopyDay, startCopyPerson, pasteToCell, pasteToDay, cancelCopy,
       }),
-      h("p",{style:{fontSize:15,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。升A／升B 會把預備該欄搬上車、舊欄封存，需升期密碼。"),
+      h("p",{style:{fontSize:15,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。升期改到「新生預備」頁操作，需升期密碼。"),
     ),
   );
 }
@@ -1174,4 +1174,3 @@ createRoot(document.getElementById("root")).render(h(Root));
 </script>
 </body>
 </html>
- 
