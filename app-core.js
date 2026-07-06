@@ -177,25 +177,25 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson 
     const save=()=>{ if(!name.trim())return; editP(cKey,side,p.id,{name,phone,note,stop:stops?stop:undefined}); setEdit(false); };
     return h("div",{style:{display:"flex",alignItems:"center",gap:4,padding:"4px 0",flexWrap:"wrap"}},
       h("span",{style:{width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0}}),
-      h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:60,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
-      h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:{width:88,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
-      h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),style:{width:80,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12}}),
-      stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:12,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
-      h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:11,padding:"3px 8px",fontWeight:600}},"存"),
-      h("button",{onClick:()=>setEdit(false),style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:11}},"取消"),
+      h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:66,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
+      h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:{width:96,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
+      h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),style:{width:86,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
+      stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
+      h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:13,padding:"3px 8px",fontWeight:600}},"存"),
+      h("button",{onClick:()=>setEdit(false),style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:13}},"取消"),
     );
   }
 
-  return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:13,padding:"3px 0" } },
+  return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:15,padding:"3px 0" } },
     h("span", { style:{ width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0 } }),
     h("span", { style:{ fontWeight:600 } }, p.name),
-    side==="R" ? h("span", { style:{ fontSize:10,color:SIDE_COLORS.R,fontWeight:700 } }, "補") : null,
-    p.phone ? h("span", { style:{ fontSize:11,color:"#9ca3af" } }, p.phone) : null,
-    stops && p.stop ? h("span", { style:{ fontSize:11,color:"#475569",background:"#f1f5f9",borderRadius:4,padding:"0 5px" } }, p.stop) : null,
-    p.note ? h("span", { style:{ fontSize:11,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px" } }, p.note) : null,
-    !readOnly ? h("button", { onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setEdit(true);}, style:{ marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:12 } }, "改") : null,
-    !readOnly && onCopyPerson ? h("button", { onClick:()=>onCopyPerson(cKey,side,p), style:{ border:"none",background:"none",color:"#d97706",cursor:"pointer",fontSize:12 } }, "複製到") : null,
-    !readOnly ? h("button", { onClick:()=>removeP(cKey,side,p.id), style:{ border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:12 } }, "✕") : null,
+    side==="R" ? h("span", { style:{ fontSize:13,color:SIDE_COLORS.R,fontWeight:700 } }, "補") : null,
+    p.phone ? h("span", { style:{ fontSize:13,color:"#9ca3af" } }, p.phone) : null,
+    stops && p.stop ? h("span", { style:{ fontSize:13,color:"#475569",background:"#f1f5f9",borderRadius:4,padding:"0 5px" } }, p.stop) : null,
+    p.note ? h("span", { style:{ fontSize:13,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px" } }, p.note) : null,
+    !readOnly ? h("button", { onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setEdit(true);}, style:{ marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:14 } }, "改") : null,
+    !readOnly && onCopyPerson ? h("button", { onClick:()=>onCopyPerson(cKey,side,p), style:{ border:"none",background:"none",color:"#d97706",cursor:"pointer",fontSize:14 } }, "複製到") : null,
+    !readOnly ? h("button", { onClick:()=>removeP(cKey,side,p.id), style:{ border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:14 } }, "✕") : null,
   );
 }
 
