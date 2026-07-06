@@ -46,7 +46,7 @@ export async function writeBackup(snapshot, trigger, whoName) {
     // 先清掉 undefined 並驗證可序列化；失敗就別讓後續大量操作繼續（回傳 false 讓呼叫端擋下）
     clean = sanitize({
       data: snapshot.data || {}, prep: snapshot.prep || {},
-      moto: snapshot.moto || {}, motoPrep: snapshot.motoPrep || {},
+      moto: snapshot.moto || {}, motoPrep: snapshot.motoPrep || {}, motoPrep2: snapshot.motoPrep2 || {},
       archive: snapshot.archive || [], staff: snapshot.staff || [],
     });
   } catch (e) {
@@ -186,11 +186,11 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson 
     );
   }
 
-  return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:15,padding:"3px 0" } },
+  return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:15,padding:"3px 0",flexWrap:"wrap" } },
     h("span", { style:{ width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0 } }),
-    h("span", { style:{ fontWeight:600 } }, p.name),
+    h("span", { style:{ fontWeight:600,whiteSpace:"nowrap" } }, p.name),
     side==="R" ? h("span", { style:{ fontSize:13,color:SIDE_COLORS.R,fontWeight:700 } }, "補") : null,
-    p.phone ? h("span", { style:{ fontSize:13,color:"#9ca3af" } }, p.phone) : null,
+    p.phone ? h("span", { style:{ fontSize:13,color:"#9ca3af",whiteSpace:"nowrap" } }, p.phone) : null,
     stops && p.stop ? h("span", { style:{ fontSize:13,color:"#475569",background:"#f1f5f9",borderRadius:4,padding:"0 5px" } }, p.stop) : null,
     p.note ? h("span", { style:{ fontSize:13,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px" } }, p.note) : null,
     !readOnly ? h("button", { onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setEdit(true);}, style:{ marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:14 } }, "改") : null,
