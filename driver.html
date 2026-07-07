@@ -20,7 +20,7 @@
 import {
   h, useState, useEffect, useMemo, createRoot, DOC, onSnapshot,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
-  tk, EMPTY, buildGrid, buildMotoGrid, MOTO_DAYS, MOTO_CAP, motoKey, dot, tabGroup, tabBtn
+  tk, EMPTY, mondayOf, weekLabel, buildGrid, buildMotoGrid, MOTO_DAYS, MOTO_CAP, motoKey, dot, tabGroup, tabBtn
 } from "./app-core.js";
 
 function todayTab(){ const d=new Date().getDay(); return (d===0||d===6)?"weekend":"weekday"; }
@@ -36,6 +36,8 @@ function Driver() {
   const [numB, setNumB] = useState(458);
   const [data, setData] = useState({});
   const [moto, setMoto] = useState({});
+  // 滾動週制：顯示本週（週一開課、週日結訓）的機車名單
+  const curMonday = mondayOf();
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ function Driver() {
       const v=snap.data();
       if(v){
         setData(v.data||{});
-        setMoto(v.moto||{});
+        setMoto((v.motoW||{})[curMonday]||{});
         setSummer(!!v.summer);
         if(typeof v.numA==="number")setNumA(v.numA);
         if(typeof v.numB==="number")setNumB(v.numB);
@@ -163,7 +165,7 @@ function Driver() {
     if(rows.length===0) return null;
     return h("div",{key:"moto"+day,style:{border:isToday?"2px solid #7c3aed":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
       h("div",{style:{padding:"10px 14px",background:isToday?"#f5f3ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
-        "週"+DAY_NAME[day]+"　機車班", isToday?h("span",{style:{fontSize:11,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
+        "週"+DAY_NAME[day]+"　機車班（本週 "+weekLabel(curMonday)+"）", isToday?h("span",{style:{fontSize:11,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"1px 8px",fontWeight:600}},"今天"):null),
       rows.map(r=>{
         const key=motoKey(day,r.time);
         const list=(moto[key]||{L:[]}).L; const over=list.length>MOTO_CAP;
