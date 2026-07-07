@@ -22,7 +22,7 @@
 import {
   h, useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
-  tk, EMPTY, fmtPhone, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
+  tk, EMPTY, fmtPhone, mondayOf, weekLabel, upcomingMondays, mondayWeeksAgo, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
 } from "./app-core.js";
 
 // ── 密碼（要改就改這兩行）────────────────────────────
@@ -56,9 +56,11 @@ function Counter() {
   const [prepNumA, setPrepNumA] = useState(460); // 預備 A 期數
   const [prepNumB, setPrepNumB] = useState(459); // 預備 B 期數
   const [data, setData] = useState({});       // 營運名單
-  const [moto, setMoto] = useState({});       // 機車正期名單（獨立）
-  const [motoPrep, setMotoPrep] = useState({}); // 機車新生班1（近期開課）
-  const [motoPrep2, setMotoPrep2] = useState({}); // 機車新生班2（再下一梯）
+  const [motoW, setMotoW] = useState({}); // 機車滾動週名單：{ "YYYY-MM-DD(週一)": { motoKey: {L:[]} } }
+  const weeks = upcomingMondays(4);       // 本週+未來三週（每次 render 重算，跨週自動滾動）
+  const curMonday = weeks[0];
+  const [mBand, setMBand] = useState(curMonday); // 機車子頁籤（週一日期字串）
+  const shownBand = weeks.includes(mBand) ? mBand : curMonday; // 跨週後自動校正到本週
   const [prep, setPrep] = useState({});       // 新生預備名單
   const [archive, setArchive] = useState([]); // 封存（升期退場），留30天
   const [openCell, setOpenCell] = useState(null);
@@ -78,9 +80,7 @@ function Counter() {
       const v=snap.data();
       if(v){
         setData(v.data||{});
-        setMoto(v.moto||{});
-        setMotoPrep(v.motoPrep||{});
-        setMotoPrep2(v.motoPrep2||{});
+        setMotoW(v.motoW||{});
         setPrep(v.prep||{});
         setSummer(!!v.summer);
         if(typeof v.numA==="number")setNumA(v.numA);
@@ -173,7 +173,7 @@ function Counter() {
   async function persist(patch) {
     setSaving(true);
     const payload = {
-      data, prep, moto, motoPrep, motoPrep2, numA, numB, prepNumA, prepNumB, archive, staff, summer,
+      data, prep, motoW, numA, numB, prepNumA, prepNumB, archive, staff, summer,
       ...patch, updatedAt: Date.now(),
     };
     try { await setDoc(DOC, payload); }
@@ -202,16 +202,34 @@ function Counter() {
     return SEAT_CAP - opViaOperating - opViaPrep - usedThis;
   }
 
-  // ── 機車班操作（正期 moto / 新生班1 motoPrep / 新生班2 motoPrep2，單一名單，無A/B）──
-  const mStore=(which)=> which==="motoPrep"?motoPrep : which==="motoPrep2"?motoPrep2 : moto;
+  // ── 機車班操作（滾動週制：以週一日期為鍵，本週+未來三週；週日結訓後自動退場）──
+  const mStore=(which)=> motoW[which] || {};
   const mSet=(which,next)=>{
-    if(which==="motoPrep"){ setMotoPrep(next); persist({motoPrep:next}); }
-    else if(which==="motoPrep2"){ setMotoPrep2(next); persist({motoPrep2:next}); }
-    else { setMoto(next); persist({moto:next}); }
+    const nw = { ...motoW, [which]: next };
+    // 自動清理：結訓超過 8 週的舊週名單移除（備份與異動紀錄仍可查），避免資料無限累積
+    const cutoff = mondayWeeksAgo(8);
+    for(const wk in nw){ if(wk < cutoff) delete nw[wk]; }
+    setMotoW(nw); persist({motoW:nw});
   };
   const mcell=(which,k)=> mStore(which)[k] || {L:[]};
   const mUsed=(which,k)=> (mStore(which)[k]||{L:[]}).L.length;
-  const mLabel=(which)=> which==="motoPrep"?"機車新生班1" : which==="motoPrep2"?"機車新生班2" : "機車正期";
+  const mLabel=(which)=> "機車班("+weekLabel(which)+")";
+  // 清空整週（填錯整週想重來用；結訓的週會自動退場，不需要清）：需清空密碼，清空前強制備份
+  async function mClearBand(which){
+    if(!requireOp())return;
+    const store=mStore(which);
+    const total=Object.keys(store).reduce((s,k)=>s+((store[k]||{L:[]}).L.length),0);
+    if(total===0){ alert(mLabel(which)+"目前沒有名單。"); return; }
+    const pw=prompt(`清空「${mLabel(which)}」全部 ${total} 位名單。\n請輸入清空密碼：`);
+    if(pw===null) return;
+    if(pw!==CLEAR_PASSWORD){ alert("清空密碼錯誤，未執行。"); return; }
+    if(!confirm(`確定清空「${mLabel(which)}」共 ${total} 位？\n（清空前系統會先自動備份，誤按可在「異動紀錄」頁還原）`)) return;
+    const ok = await writeBackup({ data, prep, motoW, archive, staff }, `清空${mLabel(which)}`, who());
+    if(!ok){ alert("備份失敗，為避免資料遺失已中止清空。請檢查網路後再試一次。"); return; }
+    mSet(which,{});
+    writeLog({who:who(),act:"清空機車班",slot:mLabel(which),name:`${total}位`});
+    alert(`已清空「${mLabel(which)}」。`);
+  }
   function addMoto(which,k,name,phone,note){
     if(!requireOp())return;
     if(!name.trim())return;
@@ -219,7 +237,7 @@ function Counter() {
     const person={id:Date.now()+Math.floor(Math.random()*1000),name:name.trim(),phone:(phone||"").trim(),note:(note||"").trim()};
     const next={...store,[k]:{L:[...c.L,person]}};
     mSet(which,next);
-    writeLog({who:who(),act:mLabel(which)+"新增",slot:k.replace("moto_","週").replace("_"," "),name:name.trim()});
+    writeLog({who:who(),act:"機車新增",slot:weekLabel(which)+"・"+k.replace("moto_","週").replace("_"," "),name:name.trim()});
     if(next[k].L.length>MOTO_CAP) alert("此時段"+mLabel(which)+"已超過 "+MOTO_CAP+" 位（目前 "+next[k].L.length+" 位），超額的請自行安排改搭汽車班或移除。");
   }
   function removeMoto(which,k,id){
@@ -229,7 +247,7 @@ function Counter() {
     if(!confirm(`確定刪除「${t?t.name:""}」？`)) return;
     const next={...store,[k]:{L:c.L.filter(x=>x.id!==id)}};
     mSet(which,next);
-    writeLog({who:who(),act:mLabel(which)+"刪除",slot:k.replace("moto_","週").replace("_"," "),name:t?t.name:""});
+    writeLog({who:who(),act:"機車刪除",slot:weekLabel(which)+"・"+k.replace("moto_","週").replace("_"," "),name:t?t.name:""});
   }
   function editMoto(which,k,id,fields){
     if(!requireOp())return;
@@ -237,33 +255,9 @@ function Counter() {
     const old=c.L.find(x=>x.id===id);
     const next={...store,[k]:{L:c.L.map(x=> x.id!==id?x:{...x,name:fields.name.trim(),phone:(fields.phone||"").trim(),note:(fields.note||"").trim()})}};
     mSet(which,next);
-    writeLog({who:who(),act:mLabel(which)+"修改",slot:k.replace("moto_","週").replace("_"," "),name:`${old?old.name:""} → ${fields.name.trim()}`});
+    writeLog({who:who(),act:"機車修改",slot:weekLabel(which)+"・"+k.replace("moto_","週").replace("_"," "),name:`${old?old.name:""} → ${fields.name.trim()}`});
   }
-  // 機車升為正期：新生整批疊加進正期對應時段，新生清空
-  async function promoteMoto(){
-    if(!requireOp())return;
-    const keys=Object.keys(motoPrep).filter(k=>(motoPrep[k]||{L:[]}).L.length>0);
-    if(keys.length===0){ alert("機車新生班1目前沒有名單可升。"); return; }
-    const total=keys.reduce((s,k)=>s+motoPrep[k].L.length,0);
-    const total2=Object.keys(motoPrep2).reduce((s,k)=>s+((motoPrep2[k]||{L:[]}).L.length),0);
-    if(!confirm(`確定升期嗎？流程：\n1. 「新生班1」共 ${total} 位 → 併入機車正期（正期原有補課生保留）\n2. 「新生班2」共 ${total2} 位 → 遞補成新的「新生班1」\n3. 「新生班2」清空，繼續收更後面的新生`)) return;
-    // 備份：升期前存一份完整快照；備份沒成功就中止
-    const ok = await writeBackup({ data, prep, moto, motoPrep, motoPrep2, archive, staff }, "機車升為正期（排隊遞補）", who());
-    if(!ok){ alert("備份失敗，為避免資料遺失已中止升期。請檢查網路後再試一次。"); return; }
-    const nextMoto={...moto};
-    let dupTotal=0;
-    for(const k of keys){
-      const cur=nextMoto[k]||{L:[]};
-      const res=mergeMotoList(cur.L, motoPrep[k].L);
-      nextMoto[k]={L:res.list};
-      dupTotal+=res.duplicate;
-    }
-    // 排隊遞補：班2 整份變成班1，班2 清空
-    setMoto(nextMoto); setMotoPrep(motoPrep2); setMotoPrep2({});
-    persist({moto:nextMoto, motoPrep:motoPrep2, motoPrep2:{}});
-    writeLog({who:who(),act:"機車升為正期",slot:"全部時段",name:`${total}位升正期${dupTotal?`（重複略過${dupTotal}）`:""}，班2共${total2}位遞補為班1`});
-    alert(`完成！${total} 位已升為正期${dupTotal?`（${dupTotal} 位因正期已有同姓名同電話，未重複新增）`:""}。\n新生班2的 ${total2} 位已遞補為新生班1，班2已清空。`);
-  }
+  // （四班制：機車不再升期，各班結訓後用「清空此班」重收下一輪）
   // 機車複製：來源(整天/單班/單人) → 目標，疊加
   const [mclip,setMclip]=useState(null); // {which, mode:'cell'|'day'|'person', key?, day?, person?}
   function mStartCopyCell(which,key){ setMclip({which,mode:"cell",key}); }
@@ -292,7 +286,7 @@ function Counter() {
     const { list, added, duplicate } = mergeMotoList(cur.L, people);
     const next={...store,[destKey]:{L:list}};
     mSet(which,next);
-    writeLog({who:who(),act:mLabel(which)+"複製",slot:destKey.replace("moto_","週").replace("_"," "),name:`${added}位${duplicate?`（重複略過${duplicate}）`:""}`});
+    writeLog({who:who(),act:"機車複製",slot:weekLabel(which)+"・"+destKey.replace("moto_","週").replace("_"," "),name:`${added}位${duplicate?`（重複略過${duplicate}）`:""}`});
     mCancelCopy();
     if(duplicate) alert(`${duplicate} 位已存在（同姓名同電話），未重複新增。`);
     if(next[destKey].L.length>MOTO_CAP) alert("貼上後此時段已超過 "+MOTO_CAP+" 位，請自行調整。");
@@ -307,7 +301,7 @@ function Counter() {
       const srcKeys=Object.keys(src).filter(k=>{ const parts=k.split("_"); return Number(parts[1])===mclip.day && (src[k]||{L:[]}).L.length>0; });
       if(srcKeys.length===0){ alert("來源那天沒有名單。"); mCancelCopy(); return; }
       // 備份：機車整天複製前存一份完整快照
-      const bk = await writeBackup({ data, prep, moto, motoPrep, motoPrep2, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
+      const bk = await writeBackup({ data, prep, motoW, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of srcKeys){
         const parts=k.split("_"); const t=parts[2];
@@ -328,7 +322,7 @@ function Counter() {
       cnt+=res.added; dupTotal+=res.duplicate;
     }
     mSet(which,nextStore);
-    writeLog({who:who(),act:mLabel(which)+"複製",slot:"→ 週"+destDay,name:`${cnt}位${dupTotal?`（重複略過${dupTotal}）`:""}`});
+    writeLog({who:who(),act:"機車複製",slot:weekLabel(which)+"・→ 週"+DAY_NAME[destDay],name:`${cnt}位${dupTotal?`（重複略過${dupTotal}）`:""}`});
     mCancelCopy();
     if(dupTotal) alert(`已複製 ${cnt} 位，${dupTotal} 位已存在（同姓名同電話），未重複新增。`);
   }
@@ -431,8 +425,8 @@ function Counter() {
     let moved=0; for(const k in prep){ moved+=(prep[k][side]||[]).length; }
     if(!confirm(`確定升期？\n「${oldName}」全部退場封存，「${newName}」${moved} 位升上車。`)) return;
 
-    // 備份：升期前存一份完整快照（data/prep/moto/motoPrep/archive/staff）；備份沒成功就中止，絕不硬做
-    const ok = await writeBackup({ data, prep, moto, motoPrep, motoPrep2, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
+    // 備份：升期前存一份完整快照（data/prep/motoW/archive/staff）；備份沒成功就中止，絕不硬做
+    const ok = await writeBackup({ data, prep, motoW, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
     if(!ok){ alert("備份失敗，為避免資料遺失已中止升期。請檢查網路後再試一次。"); return; }
 
     // 執行：營運該欄 <- 預備該欄；舊營運該欄 -> 封存
@@ -560,7 +554,7 @@ function Counter() {
       if(realSrc.length===0){ alert("來源那天沒有任何乘客。"); cancelCopy(); return; }
       if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）`)) return;
       // 備份：大量複製（整天）前存一份完整快照
-      const bk = await writeBackup({ data, prep, moto, motoPrep, motoPrep2, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
+      const bk = await writeBackup({ data, prep, motoW, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of realSrc){
         const [r,,t]=k.split("_");
@@ -671,9 +665,7 @@ function Counter() {
       h("div", { style:tabGroup },
         h("button",{onClick:()=>setPage("table"),style:tabBtn(page==="table")},"汽車正期班表"),
         h("button",{onClick:()=>setPage("prep"),style:tabBtn(page==="prep")},"汽車新生班表"),
-        h("button",{onClick:()=>setPage("moto"),style:tabBtn(page==="moto")},"機車正期班表"),
-        h("button",{onClick:()=>setPage("motoPrep"),style:tabBtn(page==="motoPrep")},"機車新生班1"),
-        h("button",{onClick:()=>setPage("motoPrep2"),style:tabBtn(page==="motoPrep2")},"機車新生班2"),
+        h("button",{onClick:()=>setPage("moto"),style:tabBtn(page==="moto")},"機車班表"),
         h("button",{onClick:()=>setPage("log"),style:tabBtn(page==="log")},"異動紀錄"),
       ),
       h("button",{onClick:()=>printWeek("gongguan"),style:printBtn("#2563eb")},"🖨 公館"),
@@ -684,9 +676,19 @@ function Counter() {
     ),
 
     page==="log" ? h(LogPage,{archive}) :
-    page==="moto" ? h(MotoTable,{which:"moto",store:moto,mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,promoteMoto}) :
-    page==="motoPrep" ? h(MotoTable,{which:"motoPrep",store:motoPrep,mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,promoteMoto}) :
-    page==="motoPrep2" ? h(MotoTable,{which:"motoPrep2",store:motoPrep2,mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,promoteMoto}) :
+    page==="moto" ? h("div",null,
+      h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,alignItems:"center"}},
+        weeks.map((wk,i)=>{
+          const isCur = wk===curMonday;
+          const sel = wk===shownBand;
+          const seq = i===0?"本週開課":i===1?"下週":i===2?"下下週":"第4週";
+          return h("button",{key:wk,onClick:()=>setMBand(wk),style:{padding:"8px 16px",borderRadius:10,border:sel?"none":"1px solid #e5e7eb",background:sel?"#7c3aed":"#fff",color:sel?"#fff":"#7c3aed",fontSize:15,fontWeight:800,cursor:"pointer"}},
+            weekLabel(wk),
+            h("span",{style:{marginLeft:6,fontSize:11,background:sel?"#ddd6fe":(isCur?"#7c3aed":"#f1f5f9"),color:sel?"#5b21b6":(isCur?"#fff":"#64748b"),borderRadius:6,padding:"1px 6px",fontWeight:700}},seq));
+        }),
+      ),
+      h(MotoTable,{which:shownBand,store:mStore(shownBand),mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,mClearBand,mLabel,curMonday}),
+    ) :
     page==="prep" ? h("div",null,
       h("div",{style:{border:"1px solid #fde68a",background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:16,color:"#92400e"}},
         "這是下期招生的預備名單，不佔營運車位。每班「剩 N」= 10 − 升期後仍留車上的對向梯次人數，填滿就無法再加（避免升期爆位）。等該梯開課，按本頁右上方「升A／升B」把該梯搬上車。"),
@@ -742,18 +744,18 @@ function Counter() {
 }
 
 // ── 週表元件（營運表與預備表共用）──
-function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, mclip, mStartCopyCell, mStartCopyDay, mStartCopyPerson, mPasteCell, mPasteDay, mCancelCopy, promoteMoto }){
+function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, mclip, mStartCopyCell, mStartCopyDay, mStartCopyPerson, mPasteCell, mPasteDay, mCancelCopy, mClearBand, mLabel, curMonday }){
   const grid = buildMotoGrid();
   const DN=DAY_NAME;
-  const isPrep = which==="motoPrep" || which==="motoPrep2";
-  const accent = isPrep ? "#0891b2" : "#7c3aed";
+  const isCurWeek = which===curMonday;
+  const accent = "#7c3aed";
   const copying = !!mclip;
-  const srcLabel = mclip ? (mclip.mode==="day"?("週"+DN[mclip.day]+" 整天") : mclip.mode==="person"?mclip.person.name : "單一時段") : "";
+  const srcLabel = mclip ? (mclip.mode==="day"?(mLabel(mclip.which)+" 週"+DN[mclip.day]+" 整天") : mclip.mode==="person"?mclip.person.name : mLabel(mclip.which)+" 單一時段") : "";
   return h("div",null,
     h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}},
-      h("div",{style:{fontSize:18,fontWeight:800,color:accent}}, which==="motoPrep"?"機車新生班1（近期開課）" : which==="motoPrep2"?"機車新生班2（再下一梯）" : "機車正期班表"),
-      which==="motoPrep" ? h("button",{onClick:promoteMoto,style:{padding:"7px 16px",borderRadius:8,border:"none",background:"#0891b2",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}},"⬆ 班1升正期（班2自動遞補）") : null,
-      which==="motoPrep2" ? h("span",{style:{fontSize:14,color:"#6b7280"}},"班1升期後，這裡的名單會自動遞補成班1") : null,
+      h("div",{style:{fontSize:18,fontWeight:800,color:accent}}, "機車班 "+weekLabel(which)+"（週一開課・週日結訓）", isCurWeek?h("span",{style:{marginLeft:8,fontSize:12,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"2px 8px",fontWeight:700,verticalAlign:"middle"}},"本週開課中"):null),
+      h("span",{style:{flex:1}}),
+      h("button",{onClick:()=>mClearBand(which),style:{padding:"7px 16px",borderRadius:8,border:"1px solid #fca5a5",background:"#fff",color:"#dc2626",fontSize:14,fontWeight:700,cursor:"pointer"}},"🗑 清空此週（填錯重來用）"),
     ),
     copying ? h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#fef9c3",border:"1px solid #fde047",borderRadius:10,padding:"8px 14px",marginBottom:10,fontSize:14,flexWrap:"wrap"}},
       h("span",{style:{fontWeight:700,color:"#854d0e"}},"📋 已複製「"+srcLabel+"」"),
@@ -763,9 +765,7 @@ function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, 
     copying ? h("button",{onClick:mCancelCopy,style:{position:"fixed",right:16,bottom:20,zIndex:60,border:"none",background:"#854d0e",color:"#fff",borderRadius:24,padding:"12px 22px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)"}},"✕ 取消複製") : null,
     h("div",{style:{border:"1px solid #fde68a",background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:14,color:"#92400e"}},
       "機車班為獨立車輛，每時段 "+MOTO_CAP+" 位。超過仍可登記，會標紅提醒，請自行安排改搭汽車班或移除。單一上車點：公館站。",
-      which==="motoPrep" ? "　登記時注意：這裡是「近期開課」的班；約半個月後開課的請填「機車新生班2」。升期誤按可到「異動紀錄」頁用備份還原復原。" : null,
-      which==="motoPrep2" ? "　登記時注意：這裡是「再下一梯」（約半個月後開課）的班；近期開課的請填「機車新生班1」。班1升期後這裡會自動遞補成班1。" : null,
-    ),
+      "　滾動週制：上方四個分頁＝本週＋未來三週，每班「週一開課、週日結訓」，分頁直接顯示日期。週日一過（週一凌晨起）自動輪替：結訓那週退場、後面自動補上新的一週，不需任何手動操作。登記時依開課日期選對分頁；填錯整週可按「清空此週」重來（需清空密碼，清空前自動備份，誤按可在「異動紀錄」頁還原）。結訓超過 8 週的舊名單會自動移除（備份與異動紀錄仍可查）。"),
     h("div",{style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
       h("table",{style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:600}},
         h("thead",null,h("tr",null,
@@ -785,7 +785,7 @@ function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, 
             return h("td",{key:dc.day,style:tdCell},
               h("div",{style:{border:"1px solid "+(over?"#fca5a5":isSrc?"#f59e0b":"#e5e7eb"),borderLeft:"3px solid "+accent,borderRadius:8,padding:"6px 8px",background:over?"#fef2f2":isSrc?"#fffbeb":"#fff"}},
                 h("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
-                  h("span",{style:{fontSize:14,fontWeight:700,color:accent}},"機車班"),
+                  h("span",{style:{fontSize:14,fontWeight:700,color:accent}},"機車"),
                   h("span",{style:{marginLeft:"auto",fontSize:14,fontWeight:700,color:over?"#dc2626":n>=MOTO_CAP-2?"#d97706":"#059669"}}, n+"/"+MOTO_CAP+(over?" 超額!":"")),
                 ),
                 c.L.map(p=>h(MotoRow,{key:p.id,p,which,mkey:key,removeMoto,editMoto,copying,onCopyPerson:mStartCopyPerson})),
@@ -950,9 +950,8 @@ function HelpBox({ showHelp, setShowHelp }){
       item("梯次名用「數字＋A／B」，A 欄、B 欄各自一個期數、獨立進位（例如可同時是 459A ＋ 458B）。"),
       item("下期招生請到「新生預備班表」分頁登記，結構與班表相同，但不佔營運車位；每班可收人數＝10−升期後仍留車上的對向梯次人數，填滿即擋，避免升期爆位。"),
       item("該梯開課時，在「汽車新生班表」頁右上按「升A／升B」（按鈕上會顯示舊期→新期），把預備該欄整批搬上車、舊欄封存退場，需輸入升期密碼。升期前系統會自動檢查各班是否超載，會爆的班先擋下來。"),
-      item("機車新生分兩班：「機車新生班1」＝近期要開課的、「機車新生班2」＝再下一梯（約半個月後）。登記時看開課時間選對分頁；不確定屬於哪班，先問清楚再填。"),
-      item("機車升期在「機車新生班1」頁按「⬆ 班1升正期（班2自動遞補）」：班1整批併入正期 → 班2自動變成新的班1 → 班2清空繼續收更後面的新生。班2頁沒有升期按鈕，一律照這個順序排隊。"),
-      item("機車升期若誤按：系統在升期前已自動存備份，用管理密碼進「異動紀錄」頁 →「備份還原」，還原「機車升為正期（排隊遞補）」那一份即可整包復原（還原前系統還會再自動備份一次現況，雙重保險）。"),
+      item("機車班採滾動週制：「機車班表」頁固定顯示本週＋未來三週共四個分頁，每班週一開課、週日結訓，分頁直接標日期（例如 7/6～7/12）。每週一凌晨自動輪替，結訓的週退場、自動補上新的第四週，完全不用手動處理；司機端也只顯示當週名單。"),
+      item("機車班不升期也不用清班：結訓的週會自動退場。「清空此週」只在整週填錯想重來時用（需清空密碼），清空前系統會自動備份，誤按可用管理密碼到「異動紀錄」頁 →「備份還原」整包復原。結訓超過 8 週的舊名單自動移除。"),
       item("複製名單：點某班的「複製」或某天標題的「複製這天」，再點目標的「貼到這班／貼到這天」。可單班、整天、跨路線複製，疊加且超過 10 位自動略過；跨路線時上車站會自動調整。"),
       item("暑期加開：平日工具列按「☀暑期加開」，平日表會多出 09:30（→12:30回）與 13:00（→16:00回）兩個時段（三線比照原出車日），暑期結束點同一鈕關閉即收起，資料保留。"),
       item("司機請改用司機專頁（driver.html）查看當天名單，該頁唯讀、會即時更新。"),
@@ -1050,7 +1049,7 @@ function LogPage() {
     const num = (v, d)=> typeof v==="number" ? v : d;
     // 只寫白名單欄位，避免 main 混入非白名單欄位導致寫入被規則擋下
     await setDoc(DOC, {
-      data: base.data||{}, prep: base.prep||{}, moto: base.moto||{}, motoPrep: base.motoPrep||{}, motoPrep2: base.motoPrep2||{},
+      data: base.data||{}, prep: base.prep||{}, motoW: base.motoW||{},
       numA: num(base.numA,459), numB: num(base.numB,458),
       prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
       archive: base.archive||[], staff: list, summer: !!base.summer,
@@ -1066,17 +1065,17 @@ function LogPage() {
     const list=staff.filter(x=>x!==n); setStaff(list); saveStaff(list);
   }
 
-  // 還原：用選定的備份快照，整包覆蓋 data/prep/moto/motoPrep/archive/staff
+  // 還原：用選定的備份快照，整包覆蓋 data/prep/motoW/archive/staff
   // （梯次期數 numA/numB/prepNumA/prepNumB 與暑期設定 summer 不受影響）
   async function restoreBackup(b){
     const when = fmt(b.t);
-    if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車正期、機車新生、封存名單、員工名單。\n（不影響梯次期數與暑期開關）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
+    if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車各週名單、封存名單、員工名單。\n（不影響梯次期數與暑期開關）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
     setRestoring(true);
     try{
       // 還原前，先把目前狀態存一份備份（保險）；這份沒存成就不能還原，否則還原錯了救不回來
       const cur = main || {};
       const safeOk = await writeBackup(
-        { data:cur.data||{}, prep:cur.prep||{}, moto:cur.moto||{}, motoPrep:cur.motoPrep||{}, motoPrep2:cur.motoPrep2||{}, archive:cur.archive||[], staff:cur.staff||[] },
+        { data:cur.data||{}, prep:cur.prep||{}, motoW:cur.motoW||{}, archive:cur.archive||[], staff:cur.staff||[] },
         "還原前自動備份", "系統"
       );
       if(!safeOk){ alert("無法先備份目前狀態，為安全起見已中止還原。請檢查網路後再試一次。"); setRestoring(false); return; }
@@ -1086,7 +1085,7 @@ function LogPage() {
       const num = (v, d)=> typeof v==="number" ? v : d;
       const patch = {
         // 名單類：用備份快照覆蓋
-        data: s.data||{}, prep: s.prep||{}, moto: s.moto||{}, motoPrep: s.motoPrep||{}, motoPrep2: s.motoPrep2||{},
+        data: s.data||{}, prep: s.prep||{}, motoW: s.motoW||{},
         archive: s.archive||[], staff: s.staff||[],
         // 期數／暑期：沿用目前值（備份不含這些，維持現況）
         numA: num(base.numA,459), numB: num(base.numB,458),
@@ -1104,12 +1103,18 @@ function LogPage() {
   if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
   if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
 
-  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","清空梯次":"#dc2626","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
   const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
   // 快照人數統計（給備份卡片顯示用）
   function snapCount(store, isMoto){
     let n=0;
     for(const k in store||{}){ const c=store[k]; n += isMoto ? (c.L||[]).length : (c.A||[]).length+(c.B||[]).length+(c.R||[]).length; }
+    return n;
+  }
+  // 機車滾動週總人數（motoW 為兩層：週一日期 → 時段 → L）
+  function motoWCount(mw){
+    let n=0;
+    for(const wk in mw||{}){ for(const k in mw[wk]||{}){ n += ((mw[wk][k]||{}).L||[]).length; } }
     return n;
   }
 
@@ -1139,7 +1144,7 @@ function LogPage() {
         h("span",{style:{fontWeight:700}},b.trigger),
         h("span",{style:{color:"#6b7280"}},b.who?`（${b.who}）`:""),
         h("span",{style:{color:"#94a3b8",fontSize:13}},
-          `營運${snapCount(b.snapshot&&b.snapshot.data)}位 · 預備${snapCount(b.snapshot&&b.snapshot.prep)}位 · 機車正期${snapCount(b.snapshot&&b.snapshot.moto,true)}位 · 機車新生班1 ${snapCount(b.snapshot&&b.snapshot.motoPrep,true)}位 · 班2 ${snapCount(b.snapshot&&b.snapshot.motoPrep2,true)}位`),
+          `營運${snapCount(b.snapshot&&b.snapshot.data)}位 · 預備${snapCount(b.snapshot&&b.snapshot.prep)}位 · 機車${motoWCount(b.snapshot&&b.snapshot.motoW)}位`),
         h("button",{onClick:()=>restoreBackup(b),disabled:restoring,style:{marginLeft:"auto",border:"none",background:restoring?"#fca5a5":"#dc2626",color:"#fff",borderRadius:6,padding:"4px 12px",fontSize:14,fontWeight:700,cursor:restoring?"not-allowed":"pointer"}},restoring?"還原中…":"還原此份"),
       ))),
     ),
