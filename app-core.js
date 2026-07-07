@@ -46,7 +46,7 @@ export async function writeBackup(snapshot, trigger, whoName) {
     // 先清掉 undefined 並驗證可序列化；失敗就別讓後續大量操作繼續（回傳 false 讓呼叫端擋下）
     clean = sanitize({
       data: snapshot.data || {}, prep: snapshot.prep || {},
-      moto: snapshot.moto || {}, motoPrep: snapshot.motoPrep || {}, motoPrep2: snapshot.motoPrep2 || {},
+      motoW: snapshot.motoW || {},
       archive: snapshot.archive || [], staff: snapshot.staff || [],
     });
   } catch (e) {
@@ -110,6 +110,35 @@ export const WEEKENDS = [6,0];
 export const DAY_NAME = { 0:"日",1:"一",2:"二",3:"三",4:"四",5:"五",6:"六" };
 export const tk = (r,d,t) => `${r}_${d}_${t}`;
 export const EMPTY = () => ({ A: [], B: [], R: [] });
+
+// ── 機車滾動週工具（週一開課、週日結訓；每週以「週一日期 YYYY-MM-DD」為鍵）──
+const pad2 = (n)=>String(n).padStart(2,"0");
+const ymd = (d)=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+// 該日期所屬週的週一（YYYY-MM-DD）
+export function mondayOf(d = new Date()){
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = (day.getDay() + 6) % 7; // 週一=0 … 週日=6
+  day.setDate(day.getDate() - dow);
+  return ymd(day);
+}
+// 週標籤：由週一日期字串產生「7/6～7/12」
+export function weekLabel(mondayStr){
+  const [y,m,d] = mondayStr.split("-").map(Number);
+  const mon = new Date(y, m-1, d), sun = new Date(y, m-1, d+6);
+  return (mon.getMonth()+1)+"/"+mon.getDate()+"～"+(sun.getMonth()+1)+"/"+sun.getDate();
+}
+// 本週起連續 n 週的週一日期字串（本週+未來，自動滾動）
+export function upcomingMondays(n = 4){
+  const [y,m,d] = mondayOf().split("-").map(Number);
+  const out = [];
+  for(let i=0;i<n;i++) out.push(ymd(new Date(y, m-1, d + 7*i)));
+  return out;
+}
+// 幾週前的週一（清理舊資料用）
+export function mondayWeeksAgo(w){
+  const [y,m,d] = mondayOf().split("-").map(Number);
+  return ymd(new Date(y, m-1, d - 7*w));
+}
 
 // 電話格式化：手機(09開頭10碼純數字)→0912-345-678；其他原樣保留
 export function fmtPhone(v){
