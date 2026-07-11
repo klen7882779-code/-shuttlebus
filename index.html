@@ -767,7 +767,7 @@ function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, 
       "機車班為獨立車輛，每時段 "+MOTO_CAP+" 位。超過仍可登記，會標紅提醒，請自行安排改搭汽車班或移除。單一上車點：公館站。",
       "　滾動週制：上方四個分頁＝本週＋未來三週，每班「週一開課、週日結訓」，分頁直接顯示日期。週日一過（週一凌晨起）自動輪替：結訓那週退場、後面自動補上新的一週，不需任何手動操作。登記時依開課日期選對分頁；填錯整週可按「清空此週」重來（需清空密碼，清空前自動備份，誤按可在「異動紀錄」頁還原）。結訓超過 8 週的舊名單會自動移除（備份與異動紀錄仍可查）。"),
     h("div",{style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
-      h("table",{style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:600}},
+      h("table",{style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:600,tableLayout:"fixed"}},
         h("thead",null,h("tr",null,
           h("th",{style:{...thTime,background:"#f9fafb"}},"時段"),
           MOTO_DAYS.map(day=>h("th",{key:day,style:{...thDay,background:"#f9fafb"}},
@@ -823,7 +823,7 @@ function MotoRow({ p, which, mkey, removeMoto, editMoto, copying, onCopyPerson }
     p.phone?h("span",{style:{fontSize:14,color:"#9ca3af"}},p.phone):null,
     p.note?h("span",{style:{fontSize:14,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px"}},p.note):null,
     copying ? null : h("button",{onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setEdit(true);},style:{marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:14}},"改"),
-    copying ? null : h("button",{onClick:()=>onCopyPerson(which,mkey,p),style:{border:"none",background:"none",color:"#d97706",cursor:"pointer",fontSize:14}},"複製到"),
+    copying ? null : h("button",{onClick:()=>onCopyPerson(which,mkey,p),style:{border:"none",background:"none",color:"#d97706",cursor:"pointer",fontSize:14}},"複製"),
     copying ? null : h("button",{onClick:()=>removeMoto(which,mkey,p.id),style:{border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:14}},"✕"),
   );
 }
@@ -867,10 +867,10 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
     ) : null,
     copying ? h("button",{onClick:cancelCopy,style:{position:"fixed",right:16,bottom:20,zIndex:60,border:"none",background:"#854d0e",color:"#fff",borderRadius:24,padding:"12px 22px",fontSize:16,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)"}},"✕ 取消複製") : null,
     h("div",{id:"tableWrap",style:{overflowX:"auto",border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}},
-    h("table",{id:"mainTable",style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:760}},
+    h("table",{id:"mainTable",style:{borderCollapse:"separate",borderSpacing:0,width:"100%",minWidth:760,tableLayout:"fixed"}},
       h("thead",{id:"mainThead"},h("tr",null,
         h("th",{style:{...thTime,background:"#f9fafb"}},"時段"),
-        days.map(day=>h("th",{key:day,style:{...thDay,background:"#f9fafb"}},
+        days.map(day=>h("th",{key:day,style:{...thDay,background:"#f9fafb",width:restDays[day]?110:undefined}},
           h("div",null,"週"+DAY_NAME[day]),
           restDays[day] ? null : (copying
             ? h("button",{onClick:()=>pasteToDay(day),style:pasteDayBtn},"⬇貼到這天")
