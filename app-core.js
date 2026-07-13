@@ -218,7 +218,7 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson 
   return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:15,padding:"3px 0",flexWrap:"wrap" } },
     h("span", { style:{ width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0 } }),
     h("span", { style:{ fontWeight:700, color:SIDE_COLORS[side], whiteSpace:"nowrap" } }, p.name),
-    side==="R" ? h("span", { style:{ fontSize:13,color:SIDE_COLORS.R,fontWeight:700 } }, "補") : null,
+    side==="R" ? h("span", { style:{ fontSize:13,color:SIDE_COLORS.R,fontWeight:700,whiteSpace:"nowrap" } }, "補/機車") : null,
     p.phone ? h("span", { style:{ fontSize:13,color:"#9ca3af",whiteSpace:"nowrap" } }, p.phone) : null,
     stops && p.stop ? h("span", { style:{ fontSize:13,color:"#475569",background:"#f1f5f9",borderRadius:4,padding:"0 5px" } }, p.stop) : null,
     p.note ? h("span", { style:{ fontSize:13,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px" } }, p.note) : null,
