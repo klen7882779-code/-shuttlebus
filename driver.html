@@ -132,7 +132,7 @@ function Driver() {
                   countChip("A",labelOf("A"),c.A.length),
                   countChip("B",labelOf("B"),c.B.length),
                   c.R.length>0?countChip("R","補考/機車",c.R.length):null,
-                  h("span",{style:{fontWeight:700,color:"#334155"}},`共${cnt}位`),
+                  h("span",{style:{fontWeight:700,color:cnt>SEAT_CAP?"#dc2626":"#334155"}},cnt>SEAT_CAP?`共${cnt}位(超額)`:`共${cnt}位`),
                 ),
               ),
               cnt>0
