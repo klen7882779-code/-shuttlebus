@@ -328,15 +328,20 @@ function Counter() {
   }
 
   // ── 營運表操作 ──
+  // 座位規則：表定 10 位；第 11 位需明確確認（超額登記，全年適用）；第 12 位硬擋
   function addP(k,side,name,phone,stop,note){
     if(!requireOp())return;
-    if(!name.trim()||left(k)<=0)return;
+    if(!name.trim())return;
+    const cnt = used(k);
+    if(cnt >= SEAT_CAP + 1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），最多只能超額 1 位，無法再新增。`); return; }
+    const isOver = cnt >= SEAT_CAP;
+    if(isOver && !confirm(`此班表定 ${SEAT_CAP} 位已滿。\n確定要「超額登記」第 ${cnt+1} 位嗎？\n（超額會標紅，司機端也會顯示，最多超額 1 位）`)) return;
     const c=data[k]||EMPTY();
     const person={id:Date.now(),name:name.trim(),phone:phone.trim(),note:(note||"").trim()};
     if(stop) person.stop=stop;
     const next={...data,[k]:{...c,[side]:[...c[side],person]}};
     setData(next);persist({data:next});
-    writeLog({ who:who(), act:"新增", slot:slotDesc(k), side, name:name.trim() });
+    writeLog({ who:who(), act:isOver?"超額新增":"新增", slot:slotDesc(k), side, name:name.trim() });
   }
   function removeP(k,side,id){
     if(!requireOp())return;
@@ -919,7 +924,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
                 h("span",{style:{fontSize:15,fontWeight:700,color:route.color}},route.name),
                 prepMode
                   ? h("span",{style:{fontSize:14,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}位/B${pLeftB}位`)
-                  : h("span",{style:{fontSize:14,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},"剩"+lfShow),
+                  : h("span",{style:{fontSize:14,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},lfShow<0?`超額${SEAT_CAP-lfShow}/${SEAT_CAP}`:"剩"+lfShow),
               ),
               h("div",{style:{fontSize:14,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},
                 h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}位`),
@@ -956,11 +961,11 @@ function HelpBox({ showHelp, setShowHelp }){
     ),
     showHelp ? h("ul",{style:{margin:"8px 0 0",paddingLeft:20,fontSize:16,color:"#374151"}},
       item("登記前請先在右上角「選擇操作者」，否則無法登記或修改。"),
-      item("每班共 10 個座位，由 A 梯、B 梯、補考/機車 三組共用，互相扣抵；補考/機車生只在還有空位時遞補。"),
+      item("每班表定 10 個座位，由 A 梯、B 梯、補考/機車 三組共用，互相扣抵；補考/機車生只在還有空位時遞補。必要時可「超額登記」第 11 位（按加時會跳確認，超額會標紅、司機端也看得到、寫入異動紀錄），第 12 位一律不可登記。"),
       item("點班次格子的「登記/名單」展開，先選 A／B／補考機車，再填姓名、電話、備註（可填首堂上課日）。"),
       item("中和線有三個上車站（景安／永安／頂溪），登記時需選擇；公館線、忠孝復興線為單一上車點。"),
       item("上方可切換「平日 一～五」與「假日 六日」；忠孝復興線僅週二、五、六、日有班。"),
-      item("正式換期請用升期功能（見下）；上方 A／B 的數字框僅供臨時手動微調期數，平常不需動。"),
+      item("正式換期請用升期功能（見下）。正期期數平常鎖定不可改，臨時要修按「本期」旁的「改」，需管理密碼；新生預備期數修改會跳確認彈窗。所有期數改動都寫入異動紀錄。"),
       item("梯次名用「數字＋A／B」，A 欄、B 欄各自一個期數、獨立進位（例如可同時是 459A ＋ 458B）。"),
       item("下期招生請到「新生預備班表」分頁登記，結構與班表相同，但不佔營運車位；每班可收人數＝10−升期後仍留車上的對向梯次人數，填滿即擋，避免升期爆位。"),
       item("該梯開課時，在「汽車新生班表」頁右上按「升A／升B」（按鈕上會顯示舊期→新期），把預備該欄整批搬上車、舊欄封存退場，需輸入升期密碼。升期前系統會自動檢查各班是否超載，會爆的班先擋下來。"),
@@ -1015,6 +1020,9 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
   const stops=ROUTE_STOPS[route.id]; const [stop,setStop]=useState(stops?stops[0]:"");
   // 預備模式：該 side 的剩餘位；營運模式：整班剩餘位
   const sideLeft = prepMode ? (side==="A"?pLeftA:pLeftB) : lf;
+  // 營運模式允許超額 1 位（第 11 位按下會跳確認）；預備模式維持硬上限
+  const canAdd = prepMode ? sideLeft>0 : sideLeft>-1;
+  const isOverAdd = !prepMode && sideLeft<=0 && canAdd;
   function submit(){ addP(cKey,side,name,phone,stops?stop:undefined,note); setName("");setPhone("");setNote(""); }
   return h("div",{style:{marginTop:6,background:"#fafafa",borderRadius:6,padding:6}},
     h(NameList,{c,route,removeP,editP,cKey,hideR:prepMode,onCopyPerson}),
@@ -1029,7 +1037,7 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
       h("input",{placeholder:"電話",value:phone,onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:inS(92)}),
       h("input",{placeholder:"備註(首堂日…)",value:note,onChange:(e)=>setNote(e.target.value),style:inS(110)}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"5px",borderRadius:6,border:"1px solid #d1d5db",fontSize:15,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
-      h("button",{onClick:submit,disabled:sideLeft<=0,style:{padding:"5px 10px",borderRadius:6,border:"none",background:sideLeft<=0?"#d1d5db":"#1f2937",color:"#fff",fontSize:15,fontWeight:600,cursor:sideLeft<=0?"not-allowed":"pointer"}},sideLeft<=0?"滿":"加"),
+      h("button",{onClick:submit,disabled:!canAdd,style:{padding:"5px 10px",borderRadius:6,border:"none",background:!canAdd?"#d1d5db":(isOverAdd?"#dc2626":"#1f2937"),color:"#fff",fontSize:15,fontWeight:600,cursor:!canAdd?"not-allowed":"pointer"}},!canAdd?"滿":(isOverAdd?"超額加":"加")),
     ),
   );
 }
@@ -1117,7 +1125,7 @@ function LogPage() {
   if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
   if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
 
-  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","超額新增":"#dc2626","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
   const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
   // 快照人數統計（給備份卡片顯示用）
   function snapCount(store, isMoto){
