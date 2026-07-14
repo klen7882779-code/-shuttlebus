@@ -457,7 +457,7 @@ function Counter() {
     alert(`升期完成：${newName} 已上車（${moved} 位），${oldName} 已封存。`);
   }
 
-  // 手動微調期數（萬一要修），不搬人只改數字
+  // 手動微調期數（萬一要修），不搬人只改數字；改動會寫入異動紀錄
   function setNum(which, val){
     const n=parseInt(val,10); if(isNaN(n)) return;
     const cur = which==="A"?numA : which==="B"?numB : which==="PA"?prepNumA : prepNumB;
@@ -473,6 +473,19 @@ function Counter() {
     else if(which==="B"){ setNumB(n); persist({numB:n}); }
     else if(which==="PA"){ setPrepNumA(n); persist({prepNumA:n}); }
     else if(which==="PB"){ setPrepNumB(n); persist({prepNumB:n}); }
+    writeLog({ who:who(), act:"改期數", slot:label, name:`${cur} → ${n}` });
+  }
+
+  // 修改「正期」期數：需管理密碼（防止有人亂改），通過後逐一輸入新值
+  function editMainNums(){
+    if(!requireOp()) return;
+    const pw = prompt("修改正期期數需要管理密碼：");
+    if(pw===null) return;
+    if(pw!==ADMIN_PASSWORD){ alert("管理密碼錯誤，未進入修改。"); return; }
+    const a = prompt(`正期 A 期數（目前 ${numA}），不改請直接按確定：`, String(numA));
+    if(a!==null) setNum("A", a);
+    const b = prompt(`正期 B 期數（目前 ${numB}），不改請直接按確定：`, String(numB));
+    if(b!==null) setNum("B", b);
   }
 
   // ── 複製 / 貼上 ──────────────────────────────────
@@ -723,8 +736,9 @@ function Counter() {
           h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
         ),
         h("span",{style:{color:"#6b7280",marginLeft:8}},"本期："),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:numA,onSave:(v)=>setNum("A",v)}),"A"),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:numB,onSave:(v)=>setNum("B",v)}),"B"),
+        h("span",{style:{display:"flex",alignItems:"center",gap:4,fontWeight:800,fontSize:16}},h("span",{style:dot(SIDE_COLORS.A)}),h("span",{style:{color:SIDE_COLORS.A}},nameA())),
+        h("span",{style:{display:"flex",alignItems:"center",gap:4,fontWeight:800,fontSize:16}},h("span",{style:dot(SIDE_COLORS.B)}),h("span",{style:{color:SIDE_COLORS.B}},nameB())),
+        h("button",{onClick:editMainNums,title:"修改正期期數（需管理密碼）",style:{padding:"3px 10px",borderRadius:6,border:"1px solid #d1d5db",background:"#fff",color:"#6b7280",fontSize:13,cursor:"pointer"}},"改"),
         h("span",{style:{display:"flex",alignItems:"center",gap:4,color:"#6b7280"}},h("span",{style:dot(SIDE_COLORS.R)}),"補考/機車"),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
         h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
@@ -1103,7 +1117,7 @@ function LogPage() {
   if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
   if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
 
-  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
   const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
   // 快照人數統計（給備份卡片顯示用）
   function snapCount(store, isMoto){
