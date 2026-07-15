@@ -112,11 +112,14 @@ export const tk = (r,d,t) => `${r}_${d}_${t}`;
 export const EMPTY = () => ({ A: [], B: [], R: [] });
 
 // ── 機車滾動週工具（週一開課、週日結訓；每週以「週一日期 YYYY-MM-DD」為鍵）──
+// 換週時間：週一早上 07:00（週一 00:00～06:59 仍顯示上週，供收尾）
+const ROLLOVER_HOUR = 7;
 const pad2 = (n)=>String(n).padStart(2,"0");
 const ymd = (d)=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
-// 該日期所屬週的週一（YYYY-MM-DD）
+// 該時間點所屬週的週一（YYYY-MM-DD）；判斷前先扣掉換週時數，讓週一清晨仍算上一週
 export function mondayOf(d = new Date()){
-  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const shifted = new Date(d.getTime() - ROLLOVER_HOUR * 60 * 60 * 1000);
+  const day = new Date(shifted.getFullYear(), shifted.getMonth(), shifted.getDate());
   const dow = (day.getDay() + 6) % 7; // 週一=0 … 週日=6
   day.setDate(day.getDate() - dow);
   return ymd(day);
