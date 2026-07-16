@@ -612,6 +612,45 @@ function Counter() {
     else { setAllOpen(true); setClosedSet({}); } // 全部攤開
   }
   function toggleSummer(){ if(!requireOp())return; const v=!summer; setSummer(v); persist({summer:v}); writeLog({who:who(),act:"暑期模式",slot:tab==='weekday'?'平日':'假日',name:v?'開啟':'關閉'}); }
+  // 機車班列印：印指定那一週（時段/姓名/電話/備註/簽到，格式同汽車列印）
+  function printMotoWeek(which){
+    const esc=(t)=>String(t==null?"":t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    const store=mStore(which);
+    let body="";
+    for(const day of MOTO_DAYS){
+      let dayBody="", dayCount=0;
+      for(const sl of MOTO_SLOTS){
+        const key=motoKey(day,sl.time);
+        const list=(store[key]||{L:[]}).L;
+        if(list.length===0) continue;
+        dayCount+=list.length;
+        dayBody+='<tr><td class="grp" rowspan="'+list.length+'">'+esc(sl.time)+'<br><span class="rt">'+esc(sl.label)+'</span></td>';
+        list.forEach(function(p,i){
+          if(i>0) dayBody+="<tr>";
+          dayBody+='<td class="nm">'+esc(p.name)+'</td><td>'+esc(p.phone||"")+'</td><td>'+esc(p.note||"")+'</td><td class="sign"></td></tr>';
+        });
+      }
+      if(dayCount===0) continue;
+      body+='<tr class="dayhdr"><td colspan="5">週'+DAY_NAME[day]+'</td></tr>'+dayBody;
+    }
+    if(!body){ alert("機車班("+weekLabel(which)+")目前沒有名單可列印。"); return; }
+    const pages='<div class="page"><h2>機車班 接駁名單　<span class="sub">'+esc(weekLabel(which))+'（週一開課・週日結訓）　上車點：公館站</span></h2><table><thead><tr><th>時段</th><th>姓名</th><th>電話</th><th>備註</th><th>簽到</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    const html='<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>機車班接駁名單</title><style>'
+      +'*{box-sizing:border-box;}body{font-family:system-ui,"Microsoft JhengHei",sans-serif;margin:0;color:#111;}'
+      +'.page{padding:18px 22px;page-break-after:always;}.page:last-child{page-break-after:auto;}'
+      +'h2{font-size:20px;margin:0 0 10px;border-bottom:2px solid #333;padding-bottom:6px;}'
+      +'.sub{font-size:13px;color:#666;font-weight:400;}'
+      +'table{width:100%;border-collapse:collapse;font-size:14px;}'
+      +'th,td{border:1px solid #999;padding:6px 8px;text-align:left;}th{background:#eee;font-size:13px;}'
+      +'td.grp{font-weight:700;background:#f7f7f7;white-space:nowrap;text-align:center;vertical-align:middle;}'
+      +'td.grp .rt{font-size:11px;color:#7c3aed;font-weight:400;}'
+      +'td.nm{font-weight:700;}td.sign{width:60px;}tr.dayhdr td{background:#ede9fe;font-weight:800;font-size:15px;text-align:left;}@media print{@page{margin:12mm;}}'
+      +'</style></head><body>'+pages+'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>';
+    const w=window.open("","_blank");
+    if(!w){ alert("瀏覽器擋住了新視窗，請允許彈出視窗後再試。"); return; }
+    w.document.write(html); w.document.close();
+  }
+
   function printWeek(onlyRid){
     const esc=(t)=>String(t==null?"":t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
     const labelName=(s)=> s==="A"?(numA+"A") : s==="B"?(numB+"B") : "補考/機車";
@@ -705,7 +744,7 @@ function Counter() {
             h("span",{style:{marginLeft:6,fontSize:11,background:sel?"#ddd6fe":(isCur?"#7c3aed":"#f1f5f9"),color:sel?"#5b21b6":(isCur?"#fff":"#64748b"),borderRadius:6,padding:"1px 6px",fontWeight:700}},seq));
         }),
       ),
-      h(MotoTable,{which:shownBand,store:mStore(shownBand),mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,mClearBand,mLabel,curMonday}),
+      h(MotoTable,{which:shownBand,store:mStore(shownBand),mcell,mUsed,addMoto,removeMoto,editMoto,mclip,mStartCopyCell,mStartCopyDay,mStartCopyPerson,mPasteCell,mPasteDay,mCancelCopy,mClearBand,mLabel,curMonday,printMotoWeek}),
     ) :
     page==="prep" ? h("div",null,
       h("div",{style:{border:"1px solid #fde68a",background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:16,color:"#92400e"}},
@@ -763,7 +802,7 @@ function Counter() {
 }
 
 // ── 週表元件（營運表與預備表共用）──
-function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, mclip, mStartCopyCell, mStartCopyDay, mStartCopyPerson, mPasteCell, mPasteDay, mCancelCopy, mClearBand, mLabel, curMonday }){
+function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, mclip, mStartCopyCell, mStartCopyDay, mStartCopyPerson, mPasteCell, mPasteDay, mCancelCopy, mClearBand, mLabel, curMonday, printMotoWeek }){
   const grid = buildMotoGrid();
   const DN=DAY_NAME;
   const isCurWeek = which===curMonday;
@@ -774,6 +813,7 @@ function MotoTable({ which, store, mcell, mUsed, addMoto, removeMoto, editMoto, 
     h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}},
       h("div",{style:{fontSize:18,fontWeight:800,color:accent}}, "機車班 "+weekLabel(which)+"（週一開課・週日結訓）", isCurWeek?h("span",{style:{marginLeft:8,fontSize:12,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"2px 8px",fontWeight:700,verticalAlign:"middle"}},"本週開課中"):null),
       h("span",{style:{flex:1}}),
+      h("button",{onClick:()=>printMotoWeek(which),style:{padding:"7px 16px",borderRadius:8,border:"1px solid #7c3aed",background:"#fff",color:"#7c3aed",fontSize:14,fontWeight:700,cursor:"pointer"}},"🖨 列印此週"),
       h("button",{onClick:()=>mClearBand(which),style:{padding:"7px 16px",borderRadius:8,border:"1px solid #fca5a5",background:"#fff",color:"#dc2626",fontSize:14,fontWeight:700,cursor:"pointer"}},"🗑 清空此週（填錯重來用）"),
     ),
     copying ? h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#fef9c3",border:"1px solid #fde047",borderRadius:10,padding:"8px 14px",marginBottom:10,fontSize:14,flexWrap:"wrap"}},
