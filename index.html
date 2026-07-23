@@ -889,12 +889,26 @@ function MotoRow({ p, which, mkey, removeMoto, editMoto, copying, onCopyPerson }
 
 function MotoEditor({ which, mkey, addMoto }){
   const [name,setName]=useState(""),[phone,setPhone]=useState(""),[note,setNote]=useState("");
-  function submit(){ addMoto(which,mkey,name,phone,note); setName("");setPhone("");setNote(""); }
-  return h("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
-    h("input",{placeholder:"姓名",value:name,onChange:e=>setName(e.target.value),style:inS(60)}),
-    h("input",{placeholder:"電話",value:phone,onChange:e=>setPhone(e.target.value),onBlur:e=>setPhone(fmtPhone(e.target.value)),style:inS(90)}),
-    h("input",{placeholder:"備註",value:note,onChange:e=>setNote(e.target.value),style:inS(70)}),
-    h("button",{onClick:submit,style:{padding:"5px 12px",borderRadius:6,border:"none",background:"#7c3aed",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}},"加"),
+  const [justAdded,setJustAdded]=useState("");
+  function submit(){
+    const nm=name.trim();
+    if(!nm) return;
+    addMoto(which,mkey,name,phone,note); setName("");setPhone("");setNote("");
+    setJustAdded(nm);
+    setTimeout(()=>setJustAdded(""),8000);
+  }
+  return h("div",null,
+    justAdded ? h("div",{style:{marginBottom:6,padding:"6px 8px",borderRadius:6,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+      h("span",null,"✅ 已加入 "+justAdded),
+      h("span",{style:{fontWeight:400}},"｜這位還有其他天要搭車嗎？記得一起登記（點他旁邊的「複製」最快）"),
+      h("button",{onClick:()=>setJustAdded(""),style:{marginLeft:"auto",border:"none",background:"none",color:"#92400e",cursor:"pointer",fontSize:14,fontWeight:700}},"✕"),
+    ) : null,
+    h("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
+      h("input",{placeholder:"姓名",value:name,onChange:e=>setName(e.target.value),style:inS(60)}),
+      h("input",{placeholder:"電話",value:phone,onChange:e=>setPhone(e.target.value),onBlur:e=>setPhone(fmtPhone(e.target.value)),style:inS(90)}),
+      h("input",{placeholder:"備註",value:note,onChange:e=>setNote(e.target.value),style:inS(70)}),
+      h("button",{onClick:submit,style:{padding:"5px 12px",borderRadius:6,border:"none",background:"#7c3aed",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}},"加"),
+    ),
   );
 }
 
@@ -1002,6 +1016,7 @@ function HelpBox({ showHelp, setShowHelp }){
     showHelp ? h("ul",{style:{margin:"8px 0 0",paddingLeft:20,fontSize:16,color:"#374151"}},
       item("登記前請先在右上角「選擇操作者」，否則無法登記或修改。"),
       item("每班表定 10 個座位，由 A 梯、B 梯、補考/機車 三組共用，互相扣抵；補考/機車生只在還有空位時遞補。必要時可「超額登記」第 11 位（按加時會跳確認，超額會標紅、司機端也看得到、寫入異動紀錄），第 12 位一律不可登記。"),
+      item("同一位學生若一週有多天要搭車，每一天都要各自登記，不要只登記一天。加完人後畫面會出現提醒；把該生加到其他天最快的方式是點他旁邊的「複製」，再到目標那天貼上。"),
       item("點班次格子的「登記/名單」展開，先選 A／B／補考機車，再填姓名、電話、備註（可填首堂上課日）。"),
       item("中和線有三個上車站（景安／永安／頂溪），登記時需選擇；公館線、忠孝復興線為單一上車點。"),
       item("上方可切換「平日 一～五」與「假日 六日」；忠孝復興線僅週二、五、六、日有班。"),
@@ -1058,14 +1073,29 @@ function OperatorPicker({ staff, operator, setOperator }){
 function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMode, pLeftA, pLeftB, onCopyPerson }) {
   const [side,setSide]=useState("A"); const [name,setName]=useState(""); const [phone,setPhone]=useState(""); const [note,setNote]=useState("");
   const stops=ROUTE_STOPS[route.id]; const [stop,setStop]=useState(stops?stops[0]:"");
+  const [justAdded,setJustAdded]=useState(""); // 剛加入的人名，用於提醒登記其他天
   // 預備模式：該 side 的剩餘位；營運模式：整班剩餘位
   const sideLeft = prepMode ? (side==="A"?pLeftA:pLeftB) : lf;
   // 營運模式允許超額 1 位（第 11 位按下會跳確認）；預備模式維持硬上限
   const canAdd = prepMode ? sideLeft>0 : sideLeft>-1;
   const isOverAdd = !prepMode && sideLeft<=0 && canAdd;
-  function submit(){ addP(cKey,side,name,phone,stops?stop:undefined,note); setName("");setPhone("");setNote(""); }
+  function submit(){
+    const nm=name.trim();
+    if(!nm) return;
+    const before=c.A.length+c.B.length+c.R.length;
+    addP(cKey,side,name,phone,stops?stop:undefined,note);
+    setName("");setPhone("");setNote("");
+    // 提醒：該生若還有其他天要搭車，記得一併登記（用「複製」最快）
+    setJustAdded(nm);
+    setTimeout(()=>setJustAdded(""),8000);
+  }
   return h("div",{style:{marginTop:6,background:"#fafafa",borderRadius:6,padding:6}},
     h(NameList,{c,route,removeP,editP,cKey,hideR:prepMode,onCopyPerson}),
+    justAdded ? h("div",{style:{marginTop:6,padding:"6px 8px",borderRadius:6,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+      h("span",null,"✅ 已加入 "+justAdded),
+      h("span",{style:{fontWeight:400}},"｜這位還有其他天要搭車嗎？記得一起登記（點他旁邊的「複製」最快）"),
+      h("button",{onClick:()=>setJustAdded(""),style:{marginLeft:"auto",border:"none",background:"none",color:"#92400e",cursor:"pointer",fontSize:14,fontWeight:700}},"✕"),
+    ) : null,
     h("div",{style:{display:"flex",borderRadius:6,overflow:"hidden",border:"1px solid #d1d5db",marginTop:6,width:"fit-content"}},
       h("button",{onClick:()=>setSide("A"),style:sideBtn(side==="A",SIDE_COLORS.A)},labelOf("A")),
       h("button",{onClick:()=>setSide("B"),style:sideBtn(side==="B",SIDE_COLORS.B)},labelOf("B")),
