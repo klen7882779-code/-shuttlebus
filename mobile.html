@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#2563eb" />
+<title>接駁登記 · 手機版</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:#f1f5f9; font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif; color:#1f2937; }
+  #root { min-height:100vh; }
+  .spin { width:28px; height:28px; border:3px solid #e5e7eb; border-top-color:#2563eb; border-radius:50%; animation:r .8s linear infinite; margin:0 auto; }
+  @keyframes r { to { transform:rotate(360deg); } }
+  input, select, button { font-family:inherit; font-size:16px; }
+  input, select { -webkit-appearance:none; appearance:none; }
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;justify-content:center;align-items:center;height:100vh"><div class="spin"></div></div></div>
+
+<script type="module">
+import {
+  h, useState, useEffect, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog,
+  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
+  tk, EMPTY, fmtPhone, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
+  mondayOf, weekLabel, upcomingMondays
+} from "./app-core.js";
+
+const COUNTER_PASSWORD = "22102270";
+
+// ── 共用樣式 ──────────────────────────────
+const card = { background:"#fff", borderRadius:14, marginBottom:10, overflow:"hidden", boxShadow:"0 1px 3px rgba(0,0,0,.06)" };
+const bigBtn = (bg,fg) => ({ padding:"12px 16px", borderRadius:12, border:"none", background:bg, color:fg||"#fff", fontSize:16, fontWeight:700, cursor:"pointer" });
+const pill = (sel,color) => ({ padding:"9px 14px", borderRadius:999, border: sel?"none":"1px solid #e2e8f0", background: sel?color:"#fff", color: sel?"#fff":color, fontSize:15, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 });
+const inputS = { width:"100%", padding:"11px 12px", borderRadius:10, border:"1px solid #cbd5e1", fontSize:16, background:"#fff" };
+
+// ── 密碼閘門 ──────────────────────────────
+function Gate({ onPass }) {
+  const [v,setV] = useState(""); const [err,setErr] = useState(false);
+  const go = () => { if(v===COUNTER_PASSWORD) onPass(); else { setErr(true); setV(""); } };
+  return h("div",{style:{display:"flex",flexDirection:"column",justifyContent:"center",minHeight:"100vh",padding:24}},
+    h("div",{style:{...card,padding:24}},
+      h("div",{style:{fontSize:22,fontWeight:800,marginBottom:6}},"接駁登記"),
+      h("div",{style:{fontSize:15,color:"#6b7280",marginBottom:18}},"手機版・請輸入櫃台密碼"),
+      h("input",{type:"password",inputMode:"numeric",value:v,autoFocus:true,
+        onChange:(e)=>{setV(e.target.value);setErr(false);},
+        onKeyDown:(e)=>e.key==="Enter"&&go(),
+        style:{...inputS, border: err?"2px solid #dc2626":"1px solid #cbd5e1", marginBottom:12}}),
+      err?h("div",{style:{color:"#dc2626",fontSize:14,marginBottom:12,fontWeight:600}},"密碼錯誤，請再試一次"):null,
+      h("button",{onClick:go,style:{...bigBtn("#2563eb"),width:"100%"}},"進入"),
+      h("div",{style:{fontSize:13,color:"#9ca3af",marginTop:14,lineHeight:1.6}},
+        "手機版可查名單、加人、改人、刪人。升期、清空、備份還原、列印等操作請用電腦版。"),
+    ),
+  );
+}
+
+// ── 操作者選擇 ─────────────────────────────
+function OpBar({ staff, operator, setOperator }) {
+  const [other,setOther] = useState(false);
+  const unset = !operator;
+  return h("div",{style:{...card, padding:"10px 12px", marginBottom:10, border: unset?"2px solid #dc2626":"none", background: unset?"#fef2f2":"#fff"}},
+    h("div",{style:{fontSize:13,color: unset?"#dc2626":"#6b7280",fontWeight:700,marginBottom:6}},
+      unset?"⚠ 請先選擇操作者，否則無法登記":"操作者"),
+    h("div",{style:{display:"flex",gap:8}},
+      h("select",{value: other?"__other__":operator, onChange:(e)=>{
+          const v=e.target.value;
+          if(v==="__other__"){ setOther(true); setOperator(""); }
+          else { setOther(false); setOperator(v); localStorage.setItem("op_name",v); }
+        }, style:{...inputS, flex:1}},
+        h("option",{value:"",disabled:true},"請選擇"),
+        staff.map(n=>h("option",{key:n,value:n},n)),
+        h("option",{value:"__other__"},"其他…"),
+      ),
+      other?h("input",{value:operator,placeholder:"輸入名字",autoFocus:true,
+        onChange:(e)=>{setOperator(e.target.value);localStorage.setItem("op_name",e.target.value);},
+        style:{...inputS, flex:1}}):null,
+    ),
+  );
+}
+
+// ── 單一人員列 ─────────────────────────────
+function PersonRow({ p, side, stops, labelOf, onEdit, onDel }) {
+  const [open,setOpen] = useState(false);
+  const [name,setName] = useState(p.name);
+  const [phone,setPhone] = useState(p.phone||"");
+  const [note,setNote] = useState(p.note||"");
+  const [stop,setStop] = useState(p.stop || (stops?stops[0]:""));
+  const color = SIDE_COLORS[side];
+
+  if(open){
+    const save=()=>{ if(!name.trim())return; onEdit({name,phone,note,stop:stops?stop:undefined}); setOpen(false); };
+    return h("div",{style:{padding:"12px 14px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}},
+      h("input",{value:name,onChange:(e)=>setName(e.target.value),placeholder:"姓名",style:{...inputS,marginBottom:8}}),
+      h("input",{value:phone,inputMode:"tel",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),placeholder:"電話",style:{...inputS,marginBottom:8}}),
+      h("input",{value:note,onChange:(e)=>setNote(e.target.value),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
+      stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{...inputS,marginBottom:8}},
+        stops.map(s=>h("option",{key:s,value:s},s))):null,
+      h("div",{style:{display:"flex",gap:8}},
+        h("button",{onClick:save,style:{...bigBtn("#2563eb"),flex:1}},"儲存"),
+        h("button",{onClick:()=>setOpen(false),style:{...bigBtn("#e2e8f0","#475569"),flex:1}},"取消"),
+        h("button",{onClick:onDel,style:{...bigBtn("#fee2e2","#dc2626"),flex:1}},"刪除"),
+      ),
+    );
+  }
+
+  return h("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderTop:"1px solid #f1f5f9"}},
+    h("span",{style:{background:color+"1a",color,borderRadius:6,padding:"3px 8px",fontSize:12,fontWeight:800,flexShrink:0,minWidth:52,textAlign:"center"}}, labelOf(side)),
+    h("div",{style:{flex:1,minWidth:0}},
+      h("div",{style:{fontSize:17,fontWeight:700,color,marginBottom:2}},p.name),
+      h("div",{style:{fontSize:13,color:"#94a3b8",display:"flex",gap:8,flexWrap:"wrap"}},
+        stops&&p.stop?h("span",null,"上車："+p.stop):null,
+        p.note?h("span",{style:{color:"#0891b2"}},p.note):null,
+      ),
+    ),
+    p.phone?h("a",{href:"tel:"+p.phone.replace(/-/g,""),style:{fontSize:14,color:"#2563eb",background:"#eff6ff",borderRadius:8,padding:"8px 10px",textDecoration:"none",fontWeight:700,flexShrink:0}},"📞"):null,
+    h("button",{onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setOpen(true);},
+      style:{border:"1px solid #e2e8f0",background:"#fff",color:"#475569",borderRadius:8,padding:"8px 12px",fontSize:14,fontWeight:700,cursor:"pointer",flexShrink:0}},"編輯"),
+  );
+}
+
+// ── 加人表單 ──────────────────────────────
+function AddForm({ route, prepMode, labelOf, canAddSide, onAdd, isOverFn }) {
+  const [open,setOpen] = useState(false);
+  const [side,setSide] = useState("A");
+  const [name,setName] = useState(""); const [phone,setPhone] = useState(""); const [note,setNote] = useState("");
+  const stops = ROUTE_STOPS[route.id];
+  const [stop,setStop] = useState(stops?stops[0]:"");
+  const [tip,setTip] = useState("");
+
+  if(!open) return h("div",{style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9"}},
+    tip?h("div",{style:{marginBottom:8,padding:"10px 12px",borderRadius:10,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:14,fontWeight:600,lineHeight:1.5}},
+      "✅ 已加入 "+tip+"　這位還有其他天要搭車嗎？記得一起登記。"):null,
+    h("button",{onClick:()=>setOpen(true),style:{...bigBtn("#f1f5f9","#334155"),width:"100%"}},"＋ 加人"),
+  );
+
+  const ok = canAddSide(side);
+  const over = isOverFn && isOverFn(side);
+  function submit(){
+    const nm=name.trim(); if(!nm) return;
+    const done = onAdd(side,{name:nm,phone:phone.trim(),note:note.trim(),stop:stops?stop:undefined});
+    if(done===false) return;
+    setName("");setPhone("");setNote("");
+    setTip(nm); setTimeout(()=>setTip(""),8000);
+    setOpen(false);
+  }
+  return h("div",{style:{padding:"12px 14px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}},
+    h("div",{style:{display:"flex",gap:6,marginBottom:10}},
+      h("button",{onClick:()=>setSide("A"),style:{...pill(side==="A",SIDE_COLORS.A),flex:1,textAlign:"center"}},labelOf("A")),
+      h("button",{onClick:()=>setSide("B"),style:{...pill(side==="B",SIDE_COLORS.B),flex:1,textAlign:"center"}},labelOf("B")),
+      prepMode?null:h("button",{onClick:()=>setSide("R"),style:{...pill(side==="R",SIDE_COLORS.R),flex:1,textAlign:"center"}},"補考/機車"),
+    ),
+    h("input",{value:name,onChange:(e)=>setName(e.target.value),placeholder:"姓名",style:{...inputS,marginBottom:8}}),
+    h("input",{value:phone,inputMode:"tel",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),placeholder:"電話",style:{...inputS,marginBottom:8}}),
+    h("input",{value:note,onChange:(e)=>setNote(e.target.value),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
+    stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{...inputS,marginBottom:8}},
+      stops.map(s=>h("option",{key:s,value:s},s))):null,
+    h("div",{style:{display:"flex",gap:8}},
+      h("button",{onClick:submit,disabled:!ok,style:{...bigBtn(!ok?"#d1d5db":(over?"#dc2626":"#1f2937")),flex:1,cursor:ok?"pointer":"not-allowed"}}, !ok?"已滿":(over?"超額加入":"加入")),
+      h("button",{onClick:()=>setOpen(false),style:{...bigBtn("#e2e8f0","#475569")}},"取消"),
+    ),
+  );
+}
+
+// ── 主畫面 ────────────────────────────────
+function App() {
+  const [ok,setOk] = useState(false);
+  const [loaded,setLoaded] = useState(false);
+  const [operator,setOperator] = useState(localStorage.getItem("op_name")||"");
+  const [page,setPage] = useState("run"); // run / prep / moto
+  const [selDay,setSelDay] = useState(new Date().getDay());
+  const [selRoute,setSelRoute] = useState("gongguan");
+
+  const [data,setData] = useState({}); const [prep,setPrep] = useState({});
+  const [motoW,setMotoW] = useState({});
+  const [numA,setNumA] = useState(459); const [numB,setNumB] = useState(458);
+  const [prepNumA,setPrepNumA] = useState(460); const [prepNumB,setPrepNumB] = useState(459);
+  const [archive,setArchive] = useState([]); const [staff,setStaff] = useState([]);
+  const [summer,setSummer] = useState(false);
+  const weeks = upcomingMondays(4);
+  const curMonday = weeks[0];
+  const [mWeek,setMWeek] = useState(curMonday);
+  const shownWeek = weeks.includes(mWeek)?mWeek:curMonday;
+
+  useEffect(()=>{
+    if(!ok) return;
+    const unsub = onSnapshot(DOC,(snap)=>{
+      const v = snap.data();
+      if(v){
+        setData(v.data||{}); setPrep(v.prep||{}); setMotoW(v.motoW||{});
+        setArchive(v.archive||[]); setStaff(v.staff||[]); setSummer(!!v.summer);
+        if(typeof v.numA==="number") setNumA(v.numA);
+        if(typeof v.numB==="number") setNumB(v.numB);
+        if(typeof v.prepNumA==="number") setPrepNumA(v.prepNumA);
+        if(typeof v.prepNumB==="number") setPrepNumB(v.prepNumB);
+      }
+      setLoaded(true);
+    },(e)=>{ console.error(e); setLoaded(true); });
+    return ()=>unsub();
+  },[ok]);
+
+  if(!ok) return h(Gate,{onPass:()=>setOk(true)});
+  if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
+
+  const who = ()=> operator || "";
+  function requireOp(){ if(!operator){ alert("請先在上方選擇操作者。"); return false; } return true; }
+
+  async function persist(patch){
+    try{
+      const base = { data, prep, motoW, numA, numB, prepNumA, prepNumB, archive, staff, summer };
+      await setDoc(DOC, { ...base, ...patch, updatedAt: Date.now() });
+    }catch(e){ console.error(e); alert("儲存失敗，請檢查網路後再試一次。"); }
+  }
+
+  const nameA = ()=>`${numA}A`, nameB = ()=>`${numB}B`;
+  const prepNameA = ()=>`${prepNumA}A`, prepNameB = ()=>`${prepNumB}B`;
+  const labelRun = (s)=> s==="A"?nameA() : s==="B"?nameB() : "補考/機車";
+  const labelPrep = (s)=> s==="A"?prepNameA() : s==="B"?prepNameB() : "補考/機車";
+  const slotDesc=(k)=>{ const [rid,d,t]=k.split("_"); const r=ROUTES.find(x=>x.id===rid); return `${r?r.name:rid} 週${DAY_NAME[d]} ${t}`; };
+
+  const cell = (k)=> data[k]||EMPTY();
+  const pcell = (k)=> prep[k]||EMPTY();
+  const used = (k)=>{ const c=cell(k); return c.A.length+c.B.length+c.R.length; };
+  const left = (k)=> SEAT_CAP - used(k);
+  const prepLeft = (k,side)=>{ const oc=cell(k); const pc=pcell(k); const stay = side==="A"?oc.B.length:oc.A.length; return SEAT_CAP - stay - (pc[side]||[]).length; };
+
+  // ── 營運表操作 ──
+  function addRun(k,side,f){
+    if(!requireOp()) return false;
+    const cnt = used(k);
+    if(cnt >= SEAT_CAP+1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），最多只能超額 1 位。`); return false; }
+    const isOver = cnt >= SEAT_CAP;
+    if(isOver && !confirm(`此班表定 ${SEAT_CAP} 位已滿。\n確定要超額登記第 ${cnt+1} 位嗎？`)) return false;
+    const c = cell(k);
+    const person = { id:Date.now(), name:f.name, phone:f.phone, note:f.note };
+    if(f.stop) person.stop = f.stop;
+    const next = { ...data, [k]:{ ...c, [side]:[...c[side], person] } };
+    setData(next); persist({data:next});
+    writeLog({ who:who(), act:isOver?"超額新增":"新增", slot:slotDesc(k), side, name:f.name });
+    return true;
+  }
+  function editRun(k,side,id,f){
+    if(!requireOp()) return;
+    const c = cell(k);
+    const old = c[side].find(x=>x.id===id);
+    const updated = c[side].map(x=>{
+      if(x.id!==id) return x;
+      const nx = { ...x, name:f.name.trim(), phone:(f.phone||"").trim(), note:(f.note||"").trim() };
+      if(f.stop) nx.stop=f.stop; else delete nx.stop;
+      return nx;
+    });
+    const next = { ...data, [k]:{ ...c, [side]:updated } };
+    setData(next); persist({data:next});
+    writeLog({ who:who(), act:"修改", slot:slotDesc(k), side, name:`${old?old.name:""} → ${f.name.trim()}` });
+  }
+  function delRun(k,side,id){
+    if(!requireOp()) return;
+    const c = cell(k); const t = c[side].find(x=>x.id===id);
+    if(!confirm(`確定要刪除「${t?t.name:""}」嗎？`)) return;
+    const next = { ...data, [k]:{ ...c, [side]:c[side].filter(x=>x.id!==id) } };
+    setData(next); persist({data:next});
+    writeLog({ who:who(), act:"刪除", slot:slotDesc(k), side, name:t?t.name:"" });
+  }
+
+  // ── 預備表操作 ──
+  function addPrepP(k,side,f){
+    if(!requireOp()) return false;
+    if(prepLeft(k,side)<=0){ alert("此班該梯次已無可收名額。"); return false; }
+    const c = pcell(k);
+    const person = { id:Date.now(), name:f.name, phone:f.phone, note:f.note };
+    if(f.stop) person.stop = f.stop;
+    const next = { ...prep, [k]:{ ...c, [side]:[...c[side], person] } };
+    setPrep(next); persist({prep:next});
+    writeLog({ who:who(), act:"預備新增", slot:slotDesc(k), side, name:f.name });
+    return true;
+  }
+  function editPrepP(k,side,id,f){
+    if(!requireOp()) return;
+    const c = pcell(k);
+    const old = c[side].find(x=>x.id===id);
+    const updated = c[side].map(x=>{
+      if(x.id!==id) return x;
+      const nx = { ...x, name:f.name.trim(), phone:(f.phone||"").trim(), note:(f.note||"").trim() };
+      if(f.stop) nx.stop=f.stop; else delete nx.stop;
+      return nx;
+    });
+    const next = { ...prep, [k]:{ ...c, [side]:updated } };
+    setPrep(next); persist({prep:next});
+    writeLog({ who:who(), act:"預備修改", slot:slotDesc(k), side, name:`${old?old.name:""} → ${f.name.trim()}` });
+  }
+  function delPrepP(k,side,id){
+    if(!requireOp()) return;
+    const c = pcell(k); const t = c[side].find(x=>x.id===id);
+    if(!confirm(`確定要刪除「${t?t.name:""}」嗎？`)) return;
+    const next = { ...prep, [k]:{ ...c, [side]:c[side].filter(x=>x.id!==id) } };
+    setPrep(next); persist({prep:next});
+    writeLog({ who:who(), act:"預備刪除", slot:slotDesc(k), side, name:t?t.name:"" });
+  }
+
+  // ── 機車操作 ──
+  const mStore = ()=> motoW[shownWeek]||{};
+  function mSetStore(next){
+    const nw = { ...motoW, [shownWeek]:next };
+    setMotoW(nw); persist({motoW:nw});
+  }
+  function addMotoP(k,f){
+    if(!requireOp()) return false;
+    const store = mStore(); const c = store[k]||{L:[]};
+    const next = { ...store, [k]:{ L:[...c.L, { id:Date.now(), name:f.name, phone:f.phone, note:f.note }] } };
+    mSetStore(next);
+    writeLog({ who:who(), act:"機車新增", slot:weekLabel(shownWeek)+"・"+k.replace("moto_","週").replace("_"," "), name:f.name });
+    if(next[k].L.length>MOTO_CAP) alert("此時段已超過 "+MOTO_CAP+" 位，請自行安排。");
+    return true;
+  }
+  function editMotoP(k,id,f){
+    if(!requireOp()) return;
+    const store = mStore(); const c = store[k]||{L:[]};
+    const old = c.L.find(x=>x.id===id);
+    const next = { ...store, [k]:{ L:c.L.map(x=> x.id!==id?x:{ ...x, name:f.name.trim(), phone:(f.phone||"").trim(), note:(f.note||"").trim() }) } };
+    mSetStore(next);
+    writeLog({ who:who(), act:"機車修改", slot:weekLabel(shownWeek)+"・"+k.replace("moto_","週").replace("_"," "), name:`${old?old.name:""} → ${f.name.trim()}` });
+  }
+  function delMotoP(k,id){
+    if(!requireOp()) return;
+    const store = mStore(); const c = store[k]||{L:[]};
+    const t = c.L.find(x=>x.id===id);
+    if(!confirm(`確定要刪除「${t?t.name:""}」嗎？`)) return;
+    const next = { ...store, [k]:{ L:c.L.filter(x=>x.id!==id) } };
+    mSetStore(next);
+    writeLog({ who:who(), act:"機車刪除", slot:weekLabel(shownWeek)+"・"+k.replace("moto_","週").replace("_"," "), name:t?t.name:"" });
+  }
+
+  const isWeekend = (selDay===0||selDay===6);
+  const grid = buildGrid(isWeekend?"weekend":"weekday", summer);
+  const allDays = [1,2,3,4,5,6,0];
+  const today = new Date().getDay();
+
+  // ── 頁面內容 ──
+  let body;
+  if(page==="moto"){
+    const store = mStore();
+    const days = MOTO_DAYS;
+    const mDay = days.includes(selDay)?selDay:days[0];
+    body = h("div",null,
+      h("div",{style:{display:"flex",gap:6,overflowX:"auto",padding:"0 2px 10px"}},
+        weeks.map(wk=>h("button",{key:wk,onClick:()=>setMWeek(wk),style:pill(wk===shownWeek,"#7c3aed")},
+          weekLabel(wk)+(wk===curMonday?" 本週":""))),
+      ),
+      !days.includes(selDay)
+        ? h("div",{style:{...card,padding:20,textAlign:"center",color:"#94a3b8",fontSize:15}},"週"+DAY_NAME[selDay]+" 機車班休息（機車班：週二～週五）")
+        : MOTO_SLOTS.map(sl=>{
+            const key = motoKey(mDay,sl.time);
+            const list = (store[key]||{L:[]}).L;
+            const over = list.length>MOTO_CAP;
+            return h("div",{key:sl.time,style:card},
+              h("div",{style:{padding:"12px 14px",background:"#faf5ff",display:"flex",alignItems:"center",gap:8}},
+                h("span",{style:{fontSize:20,fontWeight:900,color:"#6d28d9"}},sl.time),
+                h("span",{style:{fontSize:13,color:"#94a3b8"}},sl.label),
+                h("span",{style:{marginLeft:"auto",fontSize:15,fontWeight:800,color:over?"#dc2626":"#059669"}},list.length+"/"+MOTO_CAP+(over?" 超額":"")),
+              ),
+              list.length===0?h("div",{style:{padding:"14px",color:"#cbd5e1",fontSize:15,borderTop:"1px solid #f1f5f9"}},"（無登記）")
+                : list.map(p=>h(PersonRow,{key:p.id,p,side:"R",stops:null,labelOf:()=>"機車",
+                    onEdit:(f)=>editMotoP(key,p.id,f), onDel:()=>delMotoP(key,p.id)})),
+              h(AddForm,{route:{id:"moto"},prepMode:true,labelOf:()=>"機車",
+                canAddSide:()=>true, onAdd:(s,f)=>addMotoP(key,f)}),
+            );
+          }),
+    );
+  } else {
+    const prepMode = page==="prep";
+    const labelOf = prepMode?labelPrep:labelRun;
+    const route = ROUTES.find(r=>r.id===selRoute);
+    const rows = grid.map(row=>{
+      const dc = row.days.find(x=>x.day===selDay);
+      if(!dc) return null;
+      const rt = dc.routes.find(x=>x.route.id===selRoute);
+      if(!rt) return null;
+      return { time:rt.time, label:row.slot.label, summer:row.slot.summer };
+    }).filter(Boolean);
+
+    body = rows.length===0
+      ? h("div",{style:{...card,padding:20,textAlign:"center",color:"#94a3b8",fontSize:15}}, (route?route.name:"")+" 週"+DAY_NAME[selDay]+" 沒有班次")
+      : rows.map(r=>{
+          const key = tk(selRoute,selDay,r.time);
+          const c = prepMode?pcell(key):cell(key);
+          const cnt = c.A.length+c.B.length+c.R.length;
+          const lf = left(key);
+          const pA = prepLeft(key,"A"), pB = prepLeft(key,"B");
+          return h("div",{key:r.time,style:card},
+            h("div",{style:{padding:"12px 14px",background:r.summer?"#fff7ed":"#f8fafc",display:"flex",alignItems:"center",gap:8}},
+              h("span",{style:{fontSize:20,fontWeight:900,color:r.summer?"#c2410c":"#1e293b"}},r.time),
+              h("span",{style:{fontSize:13,color:r.summer?"#ea580c":"#94a3b8",fontWeight:r.summer?700:400}},r.summer?"☀暑期":r.label),
+              prepMode
+                ? h("span",{style:{marginLeft:"auto",fontSize:14,color:"#6b7280",fontWeight:700}},`可收 A${pA}/B${pB}`)
+                : h("span",{style:{marginLeft:"auto",fontSize:15,fontWeight:800,color:lf<0?"#dc2626":lf<=2?"#d97706":"#059669"}}, lf<0?`超額${cnt}/${SEAT_CAP}`:`${cnt}/${SEAT_CAP}`),
+            ),
+            cnt===0?h("div",{style:{padding:"14px",color:"#cbd5e1",fontSize:15,borderTop:"1px solid #f1f5f9"}},"（無登記）")
+              : [].concat(
+                  c.A.map(p=>({p,side:"A"})),
+                  c.B.map(p=>({p,side:"B"})),
+                  prepMode?[]:c.R.map(p=>({p,side:"R"})),
+                ).map(({p,side})=>h(PersonRow,{key:p.id,p,side,stops:ROUTE_STOPS[selRoute],labelOf,
+                    onEdit:(f)=> prepMode?editPrepP(key,side,p.id,f):editRun(key,side,p.id,f),
+                    onDel:()=> prepMode?delPrepP(key,side,p.id):delRun(key,side,p.id)})),
+            h(AddForm,{route:route||{id:selRoute},prepMode,labelOf,
+              canAddSide:(s)=> prepMode ? (s==="A"?pA:pB)>0 : lf>-1,
+              isOverFn:(s)=> !prepMode && lf<=0,
+              onAdd:(s,f)=> prepMode?addPrepP(key,s,f):addRun(key,s,f)}),
+          );
+        });
+  }
+
+  return h("div",{style:{padding:"10px 10px 40px",maxWidth:640,margin:"0 auto"}},
+    // 標題 + 分頁
+    h("div",{style:{display:"flex",gap:6,marginBottom:10,overflowX:"auto"}},
+      h("button",{onClick:()=>setPage("run"),style:pill(page==="run","#2563eb")},"營運班表"),
+      h("button",{onClick:()=>setPage("prep"),style:pill(page==="prep","#0891b2")},"新生預備"),
+      h("button",{onClick:()=>setPage("moto"),style:pill(page==="moto","#7c3aed")},"機車班"),
+    ),
+    h(OpBar,{staff,operator,setOperator}),
+    // 期數提示
+    page!=="moto"?h("div",{style:{fontSize:13,color:"#6b7280",marginBottom:8,paddingLeft:4}},
+      page==="prep"?`預備期數：${prepNameA()} / ${prepNameB()}`:`本期：${nameA()} / ${nameB()}`):null,
+    // 選日期
+    h("div",{style:{display:"flex",gap:6,overflowX:"auto",padding:"0 2px 10px"}},
+      allDays.map(d=>h("button",{key:d,onClick:()=>setSelDay(d),style:pill(d===selDay,"#334155")},
+        "週"+DAY_NAME[d]+(d===today?" ·今天":""))),
+    ),
+    // 選路線（機車頁不需要）
+    page!=="moto"?h("div",{style:{display:"flex",gap:6,overflowX:"auto",padding:"0 2px 12px"}},
+      ROUTES.map(r=>h("button",{key:r.id,onClick:()=>setSelRoute(r.id),style:pill(r.id===selRoute,r.color)},r.name)),
+    ):null,
+    body,
+    h("div",{style:{textAlign:"center",fontSize:12,color:"#cbd5e1",marginTop:20,lineHeight:1.7}},
+      "手機版・可查名單與加改刪",h("br"),
+      "升期、清空、備份還原、列印請用電腦版"),
+  );
+}
+
+createRoot(document.getElementById("root")).render(h(App));
+</script>
+</body>
+</html>
