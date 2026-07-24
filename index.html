@@ -1082,7 +1082,6 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
   function submit(){
     const nm=name.trim();
     if(!nm) return;
-    const before=c.A.length+c.B.length+c.R.length;
     addP(cKey,side,name,phone,stops?stop:undefined,note);
     setName("");setPhone("");setNote("");
     // 提醒：該生若還有其他天要搭車，記得一併登記（用「複製」最快）
