@@ -22,7 +22,7 @@
 import {
   h, useState, useEffect, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
-  tk, EMPTY, fmtPhone, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
+  tk, EMPTY, fmtPhone, toHalfWidth, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
   mondayOf, weekLabel, upcomingMondays
 } from "./app-core.js";
 
@@ -92,7 +92,7 @@ function PersonRow({ p, side, stops, labelOf, onEdit, onDel }) {
     return h("div",{style:{padding:"12px 14px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}},
       h("input",{value:name,onChange:(e)=>setName(e.target.value),placeholder:"姓名",style:{...inputS,marginBottom:8}}),
       h("input",{value:phone,inputMode:"tel",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),placeholder:"電話",style:{...inputS,marginBottom:8}}),
-      h("input",{value:note,onChange:(e)=>setNote(e.target.value),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
+      h("input",{value:note,onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{...inputS,marginBottom:8}},
         stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("div",{style:{display:"flex",gap:8}},
@@ -151,7 +151,7 @@ function AddForm({ route, prepMode, labelOf, canAddSide, onAdd, isOverFn }) {
     ),
     h("input",{value:name,onChange:(e)=>setName(e.target.value),placeholder:"姓名",style:{...inputS,marginBottom:8}}),
     h("input",{value:phone,inputMode:"tel",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),placeholder:"電話",style:{...inputS,marginBottom:8}}),
-    h("input",{value:note,onChange:(e)=>setNote(e.target.value),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
+    h("input",{value:note,onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
     stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{...inputS,marginBottom:8}},
       stops.map(s=>h("option",{key:s,value:s},s))):null,
     h("div",{style:{display:"flex",gap:8}},
