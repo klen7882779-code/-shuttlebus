@@ -22,7 +22,7 @@
 import {
   h, useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
-  tk, EMPTY, fmtPhone, mondayOf, weekLabel, upcomingMondays, mondayWeeksAgo, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
+  tk, EMPTY, fmtPhone, toHalfWidth, mondayOf, weekLabel, upcomingMondays, mondayWeeksAgo, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
 } from "./app-core.js";
 
 // ── 密碼（要改就改這兩行）────────────────────────────
@@ -872,7 +872,7 @@ function MotoRow({ p, which, mkey, removeMoto, editMoto, copying, onCopyPerson }
     return h("div",{style:{display:"flex",gap:4,alignItems:"center",padding:"3px 0",flexWrap:"wrap"}},
       h("input",{value:name,onChange:e=>setName(e.target.value),style:inS(60)}),
       h("input",{value:phone,placeholder:"電話",onChange:e=>setPhone(e.target.value),onBlur:e=>setPhone(fmtPhone(e.target.value)),style:inS(90)}),
-      h("input",{value:note,placeholder:"備註",onChange:e=>setNote(e.target.value),style:inS(80)}),
+      h("input",{value:note,placeholder:"備註",onChange:e=>setNote(e.target.value),onBlur:e=>setNote(toHalfWidth(e.target.value)),style:inS(80)}),
       h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,padding:"3px 8px",fontSize:14,cursor:"pointer",fontWeight:600}},"存"),
       h("button",{onClick:()=>setEdit(false),style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:14}},"取消"),
     );
@@ -906,7 +906,7 @@ function MotoEditor({ which, mkey, addMoto }){
     h("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
       h("input",{placeholder:"姓名",value:name,onChange:e=>setName(e.target.value),style:inS(60)}),
       h("input",{placeholder:"電話",value:phone,onChange:e=>setPhone(e.target.value),onBlur:e=>setPhone(fmtPhone(e.target.value)),style:inS(90)}),
-      h("input",{placeholder:"備註",value:note,onChange:e=>setNote(e.target.value),style:inS(70)}),
+      h("input",{placeholder:"備註",value:note,onChange:e=>setNote(e.target.value),onBlur:e=>setNote(toHalfWidth(e.target.value)),style:inS(70)}),
       h("button",{onClick:submit,style:{padding:"5px 12px",borderRadius:6,border:"none",background:"#7c3aed",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}},"加"),
     ),
   );
@@ -1104,7 +1104,7 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
     h("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
       h("input",{placeholder:"姓名",value:name,onChange:(e)=>setName(e.target.value),style:inS(60)}),
       h("input",{placeholder:"電話",value:phone,onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:inS(92)}),
-      h("input",{placeholder:"備註(首堂日…)",value:note,onChange:(e)=>setNote(e.target.value),style:inS(110)}),
+      h("input",{placeholder:"備註(首堂日…)",value:note,onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),style:inS(110)}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"5px",borderRadius:6,border:"1px solid #d1d5db",fontSize:15,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("button",{onClick:submit,disabled:!canAdd,style:{padding:"5px 10px",borderRadius:6,border:"none",background:!canAdd?"#d1d5db":(isOverAdd?"#dc2626":"#1f2937"),color:"#fff",fontSize:15,fontWeight:600,cursor:!canAdd?"not-allowed":"pointer"}},!canAdd?"滿":(isOverAdd?"超額加":"加")),
     ),
