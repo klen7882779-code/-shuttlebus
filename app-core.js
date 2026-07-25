@@ -143,14 +143,24 @@ export function mondayWeeksAgo(w){
   return ymd(new Date(y, m-1, d - 7*w));
 }
 
-// 電話格式化：手機(09開頭10碼純數字)→0912-345-678；其他原樣保留
+// 全形→半形（數字 ０-９、全形減號、全形空白等），解決輸入法打出全形號碼
+export function toHalfWidth(s){
+  if(!s) return s;
+  return String(s)
+    .replace(/[\uFF10-\uFF19]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)) // ０-９ → 0-9
+    .replace(/[\uFF0D\u2010-\u2015\uFF70]/g, "-")  // 各種全形/長破折號 → 半形 -
+    .replace(/\u3000/g, " ");                       // 全形空白 → 半形空白
+}
+
+// 電話格式化：先轉半形，手機(09開頭10碼純數字)→0912-345-678；其他轉半形後原樣保留
 export function fmtPhone(v){
   if(!v) return v;
-  const digits = v.replace(/\D/g,"");
+  const half = toHalfWidth(v).trim();
+  const digits = half.replace(/\D/g,"");
   if(digits.length===10 && digits.startsWith("09")){
     return digits.slice(0,4)+"-"+digits.slice(4,7)+"-"+digits.slice(7);
   }
-  return v; // 市話或不符手機格式 → 原樣
+  return half; // 市話或不符手機格式 → 轉半形後原樣（至少數字變半形）
 }
 
 // 產生表格結構（summer=true 時平日加入暑期時段，依時間排序）
@@ -211,7 +221,7 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson 
       h("span",{style:{width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0}}),
       h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:66,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:{width:96,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
-      h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),style:{width:86,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
+      h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),style:{width:86,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:13,padding:"3px 8px",fontWeight:600}},"存"),
       h("button",{onClick:()=>setEdit(false),style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:13}},"取消"),
