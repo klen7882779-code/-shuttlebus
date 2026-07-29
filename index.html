@@ -893,7 +893,7 @@ function MotoEditor({ which, mkey, addMoto }){
   function submit(){
     const nm=name.trim();
     if(!nm) return;
-    addMoto(which,mkey,name,phone,note); setName("");setPhone("");setNote("");
+    addMoto(which,mkey,nm,fmtPhone(phone),toHalfWidth(note).trim()); setName("");setPhone("");setNote("");
     setJustAdded(nm);
     setTimeout(()=>setJustAdded(""),8000);
   }
@@ -1082,7 +1082,7 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
   function submit(){
     const nm=name.trim();
     if(!nm) return;
-    addP(cKey,side,name,phone,stops?stop:undefined,note);
+    addP(cKey,side,nm,fmtPhone(phone),stops?stop:undefined,toHalfWidth(note).trim());
     setName("");setPhone("");setNote("");
     // 提醒：該生若還有其他天要搭車，記得一併登記（用「複製」最快）
     setJustAdded(nm);
