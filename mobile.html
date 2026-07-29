@@ -79,7 +79,7 @@ function OpBar({ staff, operator, setOperator }) {
 }
 
 // ── 單一人員列 ─────────────────────────────
-function PersonRow({ p, side, stops, labelOf, onEdit, onDel }) {
+function PersonRow({ p, side, stops, labelOf, onEdit, onDel, onCopy }) {
   const [open,setOpen] = useState(false);
   const [name,setName] = useState(p.name);
   const [phone,setPhone] = useState(p.phone||"");
@@ -88,7 +88,7 @@ function PersonRow({ p, side, stops, labelOf, onEdit, onDel }) {
   const color = SIDE_COLORS[side];
 
   if(open){
-    const save=()=>{ if(!name.trim())return; onEdit({name,phone,note,stop:stops?stop:undefined}); setOpen(false); };
+    const save=()=>{ if(!name.trim())return; onEdit({name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined}); setOpen(false); };
     return h("div",{style:{padding:"12px 14px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}},
       h("input",{value:name,onChange:(e)=>setName(e.target.value),placeholder:"姓名",style:{...inputS,marginBottom:8}}),
       h("input",{value:phone,inputMode:"tel",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),placeholder:"電話",style:{...inputS,marginBottom:8}}),
@@ -113,6 +113,7 @@ function PersonRow({ p, side, stops, labelOf, onEdit, onDel }) {
       ),
     ),
     p.phone?h("a",{href:"tel:"+p.phone.replace(/-/g,""),style:{fontSize:14,color:"#2563eb",background:"#eff6ff",borderRadius:8,padding:"8px 10px",textDecoration:"none",fontWeight:700,flexShrink:0}},"📞"):null,
+    onCopy?h("button",{onClick:onCopy,style:{border:"1px solid #fde68a",background:"#fffbeb",color:"#d97706",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,cursor:"pointer",flexShrink:0}},"複製"):null,
     h("button",{onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setOpen(true);},
       style:{border:"1px solid #e2e8f0",background:"#fff",color:"#475569",borderRadius:8,padding:"8px 12px",fontSize:14,fontWeight:700,cursor:"pointer",flexShrink:0}},"編輯"),
   );
@@ -137,7 +138,7 @@ function AddForm({ route, prepMode, labelOf, canAddSide, onAdd, isOverFn }) {
   const over = isOverFn && isOverFn(side);
   function submit(){
     const nm=name.trim(); if(!nm) return;
-    const done = onAdd(side,{name:nm,phone:phone.trim(),note:note.trim(),stop:stops?stop:undefined});
+    const done = onAdd(side,{name:nm,phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined});
     if(done===false) return;
     setName("");setPhone("");setNote("");
     setTip(nm); setTimeout(()=>setTip(""),8000);
@@ -169,6 +170,7 @@ function App() {
   const [page,setPage] = useState("run"); // run / prep / moto
   const [selDay,setSelDay] = useState(new Date().getDay());
   const [selRoute,setSelRoute] = useState("gongguan");
+  const [clip,setClip] = useState(null); // 複製一個人：{scope:"car"|"moto", person:{...}}
 
   const [data,setData] = useState({}); const [prep,setPrep] = useState({});
   const [motoW,setMotoW] = useState({});
@@ -329,6 +331,37 @@ function App() {
     writeLog({ who:who(), act:"機車刪除", slot:weekLabel(shownWeek)+"・"+k.replace("moto_","週").replace("_"," "), name:t?t.name:"" });
   }
 
+  // ── 複製一個人 → 貼到別的班/天 ──
+  const samePerson=(a,b)=> (a.name||"").trim()===(b.name||"").trim() && (a.phone||"").trim()===(b.phone||"").trim();
+  function copyMoto(p){ setClip({ scope:"moto", person:{name:p.name,phone:p.phone||"",note:p.note||""} }); }
+  // 貼到汽車某班某梯
+  function pasteCar(k,side){
+    if(!requireOp()||!clip) return;
+    const p=clip.person;
+    const c=cell(k);
+    if(c.A.some(x=>samePerson(x,p))||c.B.some(x=>samePerson(x,p))||c.R.some(x=>samePerson(x,p))){ alert(`「${p.name}」已在此班，未重複加入。`); return; }
+    const cnt=used(k);
+    if(cnt>=SEAT_CAP+1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），無法再加。`); return; }
+    if(cnt>=SEAT_CAP && !confirm(`此班表定 ${SEAT_CAP} 位已滿，確定超額貼上第 ${cnt+1} 位？`)) return;
+    const stops=ROUTE_STOPS[k.split("_")[0]];
+    const person={ id:Date.now(), name:p.name, phone:p.phone, note:p.note };
+    if(stops) person.stop = (p.stop && stops.includes(p.stop))?p.stop:stops[0];
+    const next={ ...data, [k]:{ ...c, [side]:[...c[side], person] } };
+    setData(next); persist({data:next});
+    writeLog({ who:who(), act:"複製", slot:slotDesc(k), side, name:p.name });
+  }
+  // 貼到機車某時段
+  function pasteMoto(k){
+    if(!requireOp()||!clip) return;
+    const p=clip.person;
+    const store=mStore(); const c=store[k]||{L:[]};
+    if(c.L.some(x=>samePerson(x,p))){ alert(`「${p.name}」已在此時段，未重複加入。`); return; }
+    const next={ ...store, [k]:{ L:[...c.L, { id:Date.now(), name:p.name, phone:p.phone, note:p.note }] } };
+    mSetStore(next);
+    writeLog({ who:who(), act:"機車複製", slot:weekLabel(shownWeek)+"・"+k.replace("moto_","週").replace("_"," "), name:p.name });
+    if(next[k].L.length>MOTO_CAP) alert("此時段已超過 "+MOTO_CAP+" 位，請自行安排。");
+  }
+
   const isWeekend = (selDay===0||selDay===6);
   const grid = buildGrid(isWeekend?"weekend":"weekday", summer);
   const allDays = [1,2,3,4,5,6,0];
@@ -356,10 +389,11 @@ function App() {
                 h("span",{style:{fontSize:20,fontWeight:900,color:"#6d28d9"}},sl.time),
                 h("span",{style:{fontSize:13,color:"#94a3b8"}},sl.label),
                 h("span",{style:{marginLeft:"auto",fontSize:15,fontWeight:800,color:over?"#dc2626":"#059669"}},list.length+"/"+MOTO_CAP+(over?" 超額":"")),
+                clip&&clip.scope==="moto"?h("button",{onClick:()=>pasteMoto(key),style:{...bigBtn("#7c3aed"),padding:"8px 12px",fontSize:14}},"貼到這"):null,
               ),
               list.length===0?h("div",{style:{padding:"14px",color:"#cbd5e1",fontSize:15,borderTop:"1px solid #f1f5f9"}},"（無登記）")
                 : list.map(p=>h(PersonRow,{key:p.id,p,side:"R",stops:null,labelOf:()=>"機車",
-                    onEdit:(f)=>editMotoP(key,p.id,f), onDel:()=>delMotoP(key,p.id)})),
+                    onEdit:(f)=>editMotoP(key,p.id,f), onDel:()=>delMotoP(key,p.id), onCopy:()=>copyMoto(p)})),
               h(AddForm,{route:{id:"moto"},prepMode:true,labelOf:()=>"機車",
                 canAddSide:()=>true, onAdd:(s,f)=>addMotoP(key,f)}),
             );
@@ -392,6 +426,11 @@ function App() {
               prepMode
                 ? h("span",{style:{marginLeft:"auto",fontSize:14,color:"#6b7280",fontWeight:700}},`可收 A${pA}/B${pB}`)
                 : h("span",{style:{marginLeft:"auto",fontSize:15,fontWeight:800,color:lf<0?"#dc2626":lf<=2?"#d97706":"#059669"}}, lf<0?`超額${cnt}/${SEAT_CAP}`:`${cnt}/${SEAT_CAP}`),
+              clip&&clip.scope==="car"?h("button",{onClick:()=>{
+                  const ps=clip.person.side||"A";
+                  if(prepMode && ps==="R"){ alert("補考/機車生請貼到營運班表，預備表不收補考/機車。"); return; }
+                  pasteCar(key, prepMode?(ps==="R"?"A":ps):ps);
+                },style:{...bigBtn(prepMode?"#0891b2":"#2563eb"),padding:"8px 12px",fontSize:14}},"貼到這"):null,
             ),
             cnt===0?h("div",{style:{padding:"14px",color:"#cbd5e1",fontSize:15,borderTop:"1px solid #f1f5f9"}},"（無登記）")
               : [].concat(
@@ -400,7 +439,8 @@ function App() {
                   prepMode?[]:c.R.map(p=>({p,side:"R"})),
                 ).map(({p,side})=>h(PersonRow,{key:p.id,p,side,stops:ROUTE_STOPS[selRoute],labelOf,
                     onEdit:(f)=> prepMode?editPrepP(key,side,p.id,f):editRun(key,side,p.id,f),
-                    onDel:()=> prepMode?delPrepP(key,side,p.id):delRun(key,side,p.id)})),
+                    onDel:()=> prepMode?delPrepP(key,side,p.id):delRun(key,side,p.id),
+                    onCopy:()=> setClip({scope:"car",person:{name:p.name,phone:p.phone||"",note:p.note||"",stop:p.stop,side}})})),
             h(AddForm,{route:route||{id:selRoute},prepMode,labelOf,
               canAddSide:(s)=> prepMode ? (s==="A"?pA:pB)>0 : lf>-1,
               isOverFn:(s)=> !prepMode && lf<=0,
@@ -410,6 +450,12 @@ function App() {
   }
 
   return h("div",{style:{padding:"10px 10px 40px",maxWidth:640,margin:"0 auto"}},
+    clip?h("div",{style:{position:"sticky",top:0,zIndex:20,background:"#fffbeb",border:"2px solid #f59e0b",borderRadius:12,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",boxShadow:"0 2px 8px rgba(0,0,0,.08)"}},
+      h("span",{style:{fontSize:15,fontWeight:700,color:"#92400e"}},"📋 正在複製："+clip.person.name),
+      h("span",{style:{fontSize:13,color:"#b45309",width:"100%"}},
+        clip.scope==="car"?"切到要貼上的日期／路線，點該時段的「貼到這」":"切到要貼上的週／星期，點該時段的「貼到這」"),
+      h("button",{onClick:()=>setClip(null),style:{marginLeft:"auto",...bigBtn("#fde68a","#92400e"),padding:"8px 14px",fontSize:14}},"取消複製"),
+    ):null,
     // 標題 + 分頁
     h("div",{style:{display:"flex",gap:6,marginBottom:10,overflowX:"auto"}},
       h("button",{onClick:()=>setPage("run"),style:pill(page==="run","#2563eb")},"營運班表"),
