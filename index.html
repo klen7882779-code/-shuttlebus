@@ -55,6 +55,8 @@ function Counter() {
   const [numB, setNumB] = useState(458);      // 營運 B 欄期數
   const [prepNumA, setPrepNumA] = useState(460); // 預備 A 期數
   const [prepNumB, setPrepNumB] = useState(459); // 預備 B 期數
+  const [prepDateA, setPrepDateA] = useState(""); // 預備 A 開訓日 YYYY-MM-DD
+  const [prepDateB, setPrepDateB] = useState(""); // 預備 B 開訓日 YYYY-MM-DD
   const [data, setData] = useState({});       // 營運名單
   const [motoW, setMotoW] = useState({}); // 機車滾動週名單：{ "YYYY-MM-DD(週一)": { motoKey: {L:[]} } }
   const weeks = upcomingMondays(4);       // 本週+未來三週（每次 render 重算，跨週自動滾動）
@@ -87,6 +89,8 @@ function Counter() {
         if(typeof v.numB==="number")setNumB(v.numB);
         if(typeof v.prepNumA==="number")setPrepNumA(v.prepNumA);
         if(typeof v.prepNumB==="number")setPrepNumB(v.prepNumB);
+        setPrepDateA(v.prepDateA||"");
+        setPrepDateB(v.prepDateB||"");
         setArchive(v.archive||[]);
         setStaff(v.staff||[]);
       }
@@ -173,7 +177,7 @@ function Counter() {
   async function persist(patch) {
     setSaving(true);
     const payload = {
-      data, prep, motoW, numA, numB, prepNumA, prepNumB, archive, staff, summer,
+      data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, archive, staff, summer,
       ...patch, updatedAt: Date.now(),
     };
     try { await setDoc(DOC, payload); }
@@ -185,6 +189,7 @@ function Counter() {
   const nameB = ()=>`${numB}B`;
   const prepNameA = ()=>`${prepNumA}A`;
   const prepNameB = ()=>`${prepNumB}B`;
+  const fmtMD = (d)=>{ if(!d) return ""; const [,m,dd]=d.split("-"); return `${parseInt(m,10)}/${parseInt(dd,10)}`; };
   const cell=(k)=>data[k]||EMPTY();
   const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
   const left=(k)=>SEAT_CAP-used(k);
@@ -408,6 +413,19 @@ function Counter() {
     const oldName = side==="A"?nameA():nameB();
     const newNum  = side==="A"?prepNumA:prepNumB;
     const newName = `${newNum}${side}`;
+    const startDate = side==="A"?prepDateA:prepDateB;
+
+    // 開訓日檢查：未設 → 提醒；未到 → 警告確認
+    if(!startDate){
+      if(!confirm(`「${newName}」尚未設定開訓日。\n仍要升期嗎？（建議先設定開訓日）`)) return;
+    } else {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const sd = new Date(startDate); sd.setHours(0,0,0,0);
+      if(sd.getTime() > today.getTime()){
+        if(!confirm(`⚠ 還沒到「${newName}」的開訓日（${fmtMD(startDate)}）。\n確定現在就要升期嗎？`)) return;
+      }
+    }
+
     const pw = prompt(`升期：將「${newName}」升上車，「${oldName}」退場封存。\n請輸入升期密碼：`);
     if(pw===null) return;
     if(pw!==CLEAR_PASSWORD){ alert("升期密碼錯誤，未執行。"); return; }
@@ -453,13 +471,56 @@ function Counter() {
     const KEEP=30*24*60*60*1000;
     const nextArchive=[...archive.filter(a=>now-a.t<KEEP), { t:now, cohort:oldName, who:who(), people:archivedPeople }];
 
+    // 下一期預備期數自動進位，開訓日清空（稍後強制要求設定）
+    const nextPrepNum = (side==="A"?prepNumA:prepNumB) + 1;
     const patch={ data:nextData, prep:nextPrep, archive:nextArchive };
-    if(side==="A"){ patch.numA=newNum; patch.prepNumA=prepNumA+1; setNumA(newNum); setPrepNumA(prepNumA+1); }
-    else          { patch.numB=newNum; patch.prepNumB=prepNumB+1; setNumB(newNum); setPrepNumB(prepNumB+1); }
+    if(side==="A"){ patch.numA=newNum; patch.prepNumA=nextPrepNum; patch.prepDateA=""; setNumA(newNum); setPrepNumA(nextPrepNum); setPrepDateA(""); }
+    else          { patch.numB=newNum; patch.prepNumB=nextPrepNum; patch.prepDateB=""; setNumB(newNum); setPrepNumB(nextPrepNum); setPrepDateB(""); }
     setData(nextData); setPrep(nextPrep); setArchive(nextArchive);
     persist(patch);
     writeLog({ who:who(), act:"升期", slot:`${side}欄`, name:`${oldName} 退場 → ${newName} 上車（${moved}位）` });
-    alert(`升期完成：${newName} 已上車（${moved} 位），${oldName} 已封存。`);
+    alert(`升期完成：${newName} 已上車（${moved} 位），${oldName} 已封存。\n\n接下來請設定下一期「${nextPrepNum}${side}」的期別與開訓日。`);
+
+    // 強制設定下一期：期別自動帶入、可改，開訓日必填
+    promptNextClass(side, nextPrepNum);
+  }
+
+  // 升期後強制設定下一期（期別預設自動算好、可改，開訓日必填）
+  function promptNextClass(side, defaultNum){
+    const numStr = prompt(`下一期預備 ${side} 期數（系統自動帶 ${defaultNum}，如有誤可改）：`, String(defaultNum));
+    if(numStr===null){ alert("尚未設定下一期開訓日，請記得稍後到預備梯次按「改」補上。"); return; }
+    const n = parseInt(numStr,10);
+    if(isNaN(n)){ alert("期數不是數字，未設定。請稍後到預備梯次按「改」補上。"); return; }
+    let d = prompt(`「${n}${side}」開訓日期（格式 2026-07-18，必填）：`, "");
+    if(d===null || !/^\d{4}-\d{2}-\d{2}$/.test((d||"").trim()) || isNaN(new Date((d||"").trim()).getTime())){
+      alert("開訓日未正確設定，請稍後到預備梯次按「改」補上。");
+      // 期數若有改仍存起來
+      if(n!==defaultNum){ if(side==="A"){ setPrepNumA(n); persist({prepNumA:n}); } else { setPrepNumB(n); persist({prepNumB:n}); } }
+      return;
+    }
+    d=d.trim();
+    if(side==="A"){ setPrepNumA(n); setPrepDateA(d); persist({prepNumA:n, prepDateA:d}); }
+    else { setPrepNumB(n); setPrepDateB(d); persist({prepNumB:n, prepDateB:d}); }
+    writeLog({ who:who(), act:"設定預備梯次", slot:`預備${side}`, name:`${n}${side}・開訓 ${d}` });
+  }
+
+  // 修改預備梯次（期數＋開訓日一起改，開訓日必填）；供手動編輯與升期後強制設定共用
+  function editPrepClass(sideKey){ // sideKey: "A" | "B"
+    if(!requireOp()) return;
+    const curNum = sideKey==="A"?prepNumA:prepNumB;
+    const curDate = sideKey==="A"?prepDateA:prepDateB;
+    const numStr = prompt(`預備 ${sideKey} 期數（數字，例如 ${curNum}）：`, String(curNum));
+    if(numStr===null) return;
+    const n = parseInt(numStr,10);
+    if(isNaN(n)){ alert("期數必須是數字，未修改。"); return; }
+    let d = prompt(`「${n}${sideKey}」開訓日期（格式 2026-07-18，必填）：`, curDate||"");
+    if(d===null) return;
+    d = d.trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert("開訓日格式需為 2026-07-18，未修改。"); return; }
+    if(isNaN(new Date(d).getTime())){ alert("開訓日不是有效日期，未修改。"); return; }
+    if(sideKey==="A"){ setPrepNumA(n); setPrepDateA(d); persist({prepNumA:n, prepDateA:d}); }
+    else { setPrepNumB(n); setPrepDateB(d); persist({prepNumB:n, prepDateB:d}); }
+    writeLog({ who:who(), act:"設定預備梯次", slot:`預備${sideKey}`, name:`${n}${sideKey}・開訓 ${d}` });
   }
 
   // 手動微調期數（萬一要修），不搬人只改數字；改動會寫入異動紀錄
@@ -732,6 +793,26 @@ function Counter() {
       h("span",{style:{fontSize:15,color:saving?"#d97706":"#059669"}}, saving?"儲存中…":"● 已同步"),
     ),
 
+    // 升期到期提醒：開訓日已到或已過，且該梯尚未升期
+    (()=>{
+      const today=new Date(); today.setHours(0,0,0,0);
+      const due=[];
+      if(prepDateA){ const d=new Date(prepDateA); d.setHours(0,0,0,0); if(d.getTime()<=today.getTime()) due.push({side:"A",name:prepNameA(),old:nameA(),date:prepDateA}); }
+      if(prepDateB){ const d=new Date(prepDateB); d.setHours(0,0,0,0); if(d.getTime()<=today.getTime()) due.push({side:"B",name:prepNameB(),old:nameB(),date:prepDateB}); }
+      if(due.length===0) return null;
+      return h("div",{style:{background:"#fef2f2",border:"2px solid #f87171",borderRadius:12,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}},
+        h("span",{style:{fontSize:22}},"📅"),
+        h("div",{style:{flex:1,minWidth:200}},
+          h("div",{style:{fontSize:16,fontWeight:800,color:"#b91c1c",marginBottom:2}},"該升期了！"),
+          due.map(x=>h("div",{key:x.side,style:{fontSize:15,color:"#7f1d1d"}},
+            `${x.name} 開訓日 ${fmtMD(x.date)} 已到 → 建議升期：${x.old} 退場、${x.name} 上車`)),
+        ),
+        due.map(x=>h("button",{key:x.side,onClick:()=>{ setPage("prep"); promote(x.side); },
+          style:{padding:"10px 16px",borderRadius:10,border:"none",background:"#dc2626",color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer"}},
+          `前往升 ${x.name}`)),
+      );
+    })(),
+
     page==="log" ? h(LogPage,{archive}) :
     page==="moto" ? h("div",null,
       h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,alignItems:"center"}},
@@ -754,14 +835,24 @@ function Counter() {
           h("button",{onClick:()=>setTab("weekday"),style:tabBtn(tab==="weekday")},"平日 一～五"),
           h("button",{onClick:()=>setTab("weekend"),style:tabBtn(tab==="weekend")},"假日 六日"),
         ),
-        h("span",{style:{color:"#6b7280",marginLeft:8}},"預備期數："),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.A)}),h(NumBox,{val:prepNumA,onSave:(v)=>setNum("PA",v)}),"A"),
-        h("label",{style:{display:"flex",alignItems:"center",gap:4}},h("span",{style:dot(SIDE_COLORS.B)}),h(NumBox,{val:prepNumB,onSave:(v)=>setNum("PB",v)}),"B"),
+        h("span",{style:{color:"#6b7280",marginLeft:8}},"預備梯次："),
+        h("span",{style:{display:"inline-flex",alignItems:"center",gap:4,fontSize:15}},
+          h("span",{style:dot(SIDE_COLORS.A)}),
+          h("b",{style:{color:SIDE_COLORS.A}},prepNameA()),
+          h("span",{style:{color: prepDateA?"#6b7280":"#dc2626",fontSize:13}}, prepDateA?`開訓 ${fmtMD(prepDateA)}`:"⚠未設開訓日"),
+          h("button",{onClick:()=>editPrepClass("A"),style:{padding:"2px 8px",borderRadius:6,border:"1px solid #d1d5db",background:"#fff",color:"#6b7280",fontSize:12,cursor:"pointer"}},"改"),
+        ),
+        h("span",{style:{display:"inline-flex",alignItems:"center",gap:4,fontSize:15}},
+          h("span",{style:dot(SIDE_COLORS.B)}),
+          h("b",{style:{color:SIDE_COLORS.B}},prepNameB()),
+          h("span",{style:{color: prepDateB?"#6b7280":"#dc2626",fontSize:13}}, prepDateB?`開訓 ${fmtMD(prepDateB)}`:"⚠未設開訓日"),
+          h("button",{onClick:()=>editPrepClass("B"),style:{padding:"2px 8px",borderRadius:6,border:"1px solid #d1d5db",background:"#fff",color:"#6b7280",fontSize:12,cursor:"pointer"}},"改"),
+        ),
         tab==="weekday"?h("button",{onClick:toggleSummer,style:summer?summerOnBtn:summerOffBtn},summer?"☀ 暑期加開中（點此關閉）":"☀ 暑期加開"):null,
         h("button",{onClick:toggleAll,style:{padding:"5px 12px",borderRadius:6,border:"1px solid #cbd5e1",background:"#fff",color:"#475569",fontSize:15,fontWeight:600,cursor:"pointer"}}, allOpen?"▲ 全部收合":"▼ 全部攤開"),
         h("span",{style:{flex:1}}),
-        h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A：${nameA()} → ${prepNameA()}`),
-        h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B：${nameB()} → ${prepNameB()}`),
+        h("button",{onClick:()=>promote("A"),style:promoteBtn},`升A：${nameA()} → ${prepNameA()}${prepDateA?`（開訓${fmtMD(prepDateA)}）`:""}`),
+        h("button",{onClick:()=>promote("B"),style:promoteBtn},`升B：${nameB()} → ${prepNameB()}${prepDateB?`（開訓${fmtMD(prepDateB)}）`:""}`),
       ),
       h(RouteFilter,{selRoute,setSelRoute}),
       h(WeekTable,{
@@ -1020,7 +1111,8 @@ function HelpBox({ showHelp, setShowHelp }){
       item("點班次格子的「登記/名單」展開，先選 A／B／補考機車，再填姓名、電話、備註（可填首堂上課日）。"),
       item("中和線有三個上車站（景安／永安／頂溪），登記時需選擇；公館線、忠孝復興線為單一上車點。"),
       item("上方可切換「平日 一～五」與「假日 六日」；忠孝復興線僅週二、五、六、日有班。"),
-      item("正式換期請用升期功能（見下）。正期期數平常鎖定不可改，臨時要修按「本期」旁的「改」，需管理密碼；新生預備期數修改會跳確認彈窗。所有期數改動都寫入異動紀錄。"),
+      item("開新生梯次時，按「預備梯次」旁的「改」設定期別＋開訓日（開訓日必填）。到了開訓日，櫃台頁上方會自動跳紅色提醒「該升期了」，點提醒的按鈕即可一鍵前往升期。"),
+      item("正式換期請用升期功能。開訓日未到就手動升期會跳警告確認；升期完成後系統會自動要求你設定「下一期」的期別（自動帶入、可改）與開訓日。正期期數平常鎖定，臨時要修按「本期」旁的「改」需管理密碼。所有期數與開訓日改動都寫入異動紀錄。"),
       item("梯次名用「數字＋A／B」，A 欄、B 欄各自一個期數、獨立進位（例如可同時是 459A ＋ 458B）。"),
       item("下期招生請到「新生預備班表」分頁登記，結構與班表相同，但不佔營運車位；每班可收人數＝10−升期後仍留車上的對向梯次人數，填滿即擋，避免升期爆位。"),
       item("該梯開課時，在「汽車新生班表」頁右上按「升A／升B」（按鈕上會顯示舊期→新期），把預備該欄整批搬上車、舊欄封存退場，需輸入升期密碼。升期前系統會自動檢查各班是否超載，會爆的班先擋下來。"),
@@ -1142,7 +1234,7 @@ function LogPage() {
     await setDoc(DOC, {
       data: base.data||{}, prep: base.prep||{}, motoW: base.motoW||{},
       numA: num(base.numA,459), numB: num(base.numB,458),
-      prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
+      prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"",
       archive: base.archive||[], staff: list, summer: !!base.summer,
       updatedAt: Date.now(),
     });
@@ -1180,7 +1272,7 @@ function LogPage() {
         archive: s.archive||[], staff: s.staff||[],
         // 期數／暑期：沿用目前值（備份不含這些，維持現況）
         numA: num(base.numA,459), numB: num(base.numB,458),
-        prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
+        prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"",
         summer: !!base.summer,
         updatedAt: Date.now(),
       };
@@ -1194,7 +1286,7 @@ function LogPage() {
   if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
   if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
 
-  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","超額新增":"#dc2626","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","設定預備梯次":"#0891b2","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","超額新增":"#dc2626","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備刪除":"#dc2626","還原備份":"#b91c1c" };
   const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
   // 快照人數統計（給備份卡片顯示用）
   function snapCount(store, isMoto){
