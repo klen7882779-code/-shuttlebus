@@ -35,6 +35,10 @@ function Driver() {
   const [summer, setSummer] = useState(false);
   const [numB, setNumB] = useState(458);
   const [data, setData] = useState({});
+  const [prep, setPrep] = useState({});
+  const [prepNumA, setPrepNumA] = useState(460);
+  const [prepNumB, setPrepNumB] = useState(459);
+  const [view, setView] = useState("run"); // run=現期營運 / prep=新生預備
   const [moto, setMoto] = useState({});
   // 滾動週制：顯示本週（週一開課、週日結訓）的機車名單
   const curMonday = mondayOf();
@@ -45,18 +49,25 @@ function Driver() {
       const v=snap.data();
       if(v){
         setData(v.data||{});
+        setPrep(v.prep||{});
         setMoto((v.motoW||{})[curMonday]||{});
         setSummer(!!v.summer);
         if(typeof v.numA==="number")setNumA(v.numA);
         if(typeof v.numB==="number")setNumB(v.numB);
+        if(typeof v.prepNumA==="number")setPrepNumA(v.prepNumA);
+        if(typeof v.prepNumB==="number")setPrepNumB(v.prepNumB);
       }
       setLoaded(true);
     }, (e)=>{console.error(e);setLoaded(true);});
     return ()=>unsub();
   }, []);
 
-  const labelOf=(s)=> s==="A"?`${numA}A` : s==="B"?`${numB}B` : "補考/機車";
-  const cell=(k)=>data[k]||EMPTY();
+  const isPrep = view==="prep";
+  const src = isPrep ? prep : data;
+  const labelOf=(s)=> isPrep
+    ? (s==="A"?`${prepNumA}A` : s==="B"?`${prepNumB}B` : "補考/機車")
+    : (s==="A"?`${numA}A` : s==="B"?`${numB}B` : "補考/機車");
+  const cell=(k)=>src[k]||EMPTY();
   const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
   const grid = useMemo(()=>buildGrid(tab, summer),[tab, summer]);
   const days = tab==="weekday"?WEEKDAYS:WEEKENDS;
@@ -79,9 +90,15 @@ function Driver() {
       ),
       h("span",{style:{marginLeft:"auto",fontSize:12,color:"#059669"}},"● 即時"),
     ),
+    // 現期營運 / 新生預備 切換
+    h("div",{style:{display:"flex",gap:8,marginBottom:10}},
+      h("button",{onClick:()=>setView("run"),style:{flex:1,padding:"10px",borderRadius:10,border:isPrep?"1px solid #e5e7eb":"none",background:isPrep?"#fff":"#2563eb",color:isPrep?"#374151":"#fff",fontSize:15,fontWeight:800,cursor:"pointer"}},"現期營運"),
+      h("button",{onClick:()=>setView("prep"),style:{flex:1,padding:"10px",borderRadius:10,border:isPrep?"none":"1px solid #e5e7eb",background:isPrep?"#0891b2":"#fff",color:isPrep?"#fff":"#0e7490",fontSize:15,fontWeight:800,cursor:"pointer"}},"新生預備（下期）"),
+    ),
+    isPrep ? h("div",{style:{background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:13,color:"#0e7490"}},"這是下一期的新生名單，供提前準備參考；實際出車以「現期營運」為準。機車班不在此顯示。") : null,
     // 當期梯次圖例
     h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10,fontSize:12}},
-      tag("A",`${numA}A`), tag("B",`${numB}B`), tag("R","補考/機車"),
+      tag("A",labelOf("A")), tag("B",labelOf("B")), tag("R","補考/機車"),
     ),
     // 星期切換
     h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},
@@ -94,13 +111,13 @@ function Driver() {
     ),
     // 路線切換
     h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},
-      [{id:"all",name:"全部",color:"#475569"},...ROUTES,{id:"moto",name:"機車班",color:"#7c3aed"}].map(r=>{
+      [{id:"all",name:"全部",color:"#475569"},...ROUTES,...(isPrep?[]:[{id:"moto",name:"機車班",color:"#7c3aed"}])].map(r=>{
         const sel=r.id===selRoute;
         return h("button",{key:r.id,onClick:()=>setSelRoute(r.id),style:{padding:"8px 16px",borderRadius:10,border:sel?"none":"1px solid #e5e7eb",background:sel?(r.color):"#fff",color:sel?"#fff":r.color,fontSize:15,fontWeight:800,cursor:"pointer"}},r.name);
       }),
     ),
     // 機車班檢視（選「機車班」或「全部」時顯示）
-    selRoute==="moto" ? shownDays.map(day=>renderMoto(day)) :
+    (!isPrep && selRoute==="moto") ? shownDays.map(day=>renderMoto(day)) :
     shownDays.map(day=>{
       const isToday = day===todayDay;
       const slotRows = grid.map(row=>{
@@ -112,7 +129,7 @@ function Driver() {
         return { time: row.slot.time, label: row.slot.label, summer: row.slot.summer, routes };
       }).filter(Boolean);
       // 「全部」時，這天若有機車班，接在汽車班後面一起顯示
-      const motoBlock = selRoute==="all" ? renderMoto(day) : null;
+      const motoBlock = (!isPrep && selRoute==="all") ? renderMoto(day) : null;
       if(slotRows.length===0 && !motoBlock) return null;
       return h("div",{key:day,style:{marginBottom:18}},
         slotRows.length>0 ? h("div",{style:{border:isToday?"2px solid #2563eb":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff",marginBottom:motoBlock?12:0}},
