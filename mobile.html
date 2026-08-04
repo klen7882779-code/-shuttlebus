@@ -176,6 +176,8 @@ function App() {
   const [motoW,setMotoW] = useState({});
   const [numA,setNumA] = useState(459); const [numB,setNumB] = useState(458);
   const [prepNumA,setPrepNumA] = useState(460); const [prepNumB,setPrepNumB] = useState(459);
+  const [prepDateA,setPrepDateA] = useState(""); const [prepDateB,setPrepDateB] = useState("");
+  const [numDateA,setNumDateA] = useState(""); const [numDateB,setNumDateB] = useState("");
   const [archive,setArchive] = useState([]); const [staff,setStaff] = useState([]);
   const [summer,setSummer] = useState(false);
   const weeks = upcomingMondays(4);
@@ -194,6 +196,8 @@ function App() {
         if(typeof v.numB==="number") setNumB(v.numB);
         if(typeof v.prepNumA==="number") setPrepNumA(v.prepNumA);
         if(typeof v.prepNumB==="number") setPrepNumB(v.prepNumB);
+        setPrepDateA(v.prepDateA||""); setPrepDateB(v.prepDateB||"");
+        setNumDateA(v.numDateA||""); setNumDateB(v.numDateB||"");
       }
       setLoaded(true);
     },(e)=>{ console.error(e); setLoaded(true); });
@@ -208,7 +212,7 @@ function App() {
 
   async function persist(patch){
     try{
-      const base = { data, prep, motoW, numA, numB, prepNumA, prepNumB, archive, staff, summer };
+      const base = { data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, archive, staff, summer };
       await setDoc(DOC, { ...base, ...patch, updatedAt: Date.now() });
     }catch(e){ console.error(e); alert("儲存失敗，請檢查網路後再試一次。"); }
   }
@@ -223,7 +227,23 @@ function App() {
   const pcell = (k)=> prep[k]||EMPTY();
   const used = (k)=>{ const c=cell(k); return c.A.length+c.B.length+c.R.length; };
   const left = (k)=> SEAT_CAP - used(k);
-  const prepLeft = (k,side)=>{ const oc=cell(k); const pc=pcell(k); const stay = side==="A"?oc.B.length:oc.A.length; return SEAT_CAP - stay - (pc[side]||[]).length; };
+  // 依開訓日排序找前一梯人數（與電腦版一致）
+  function prepPrevCount(k, side){
+    const oc=cell(k); const pc=pcell(k);
+    const list=[
+      {who:"opA",date:numDateA||"0000-01-01",count:oc.A.length},
+      {who:"opB",date:numDateB||"0000-01-02",count:oc.B.length},
+      {who:"prepA",date:prepDateA,count:(pc.A||[]).length},
+      {who:"prepB",date:prepDateB,count:(pc.B||[]).length},
+    ];
+    const target=side==="A"?"prepA":"prepB";
+    const sorted=[...list].sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:a.who.localeCompare(b.who)));
+    const idx=sorted.findIndex(x=>x.who===target);
+    return idx>0?sorted[idx-1].count:0;
+  }
+  const prepLeft = (k,side)=>{ const oc=cell(k); const pc=pcell(k); return Math.max(0, SEAT_CAP - prepPrevCount(k,side) - oc.R.length - (pc[side]||[]).length); };
+  const prepRaw = (k,side)=>{ const oc=cell(k); const pc=pcell(k); return SEAT_CAP - prepPrevCount(k,side) - oc.R.length - (pc[side]||[]).length; };
+  const prepHasDate = (side)=> side==="A" ? !!prepDateA : !!prepDateB;
 
   // ── 營運表操作 ──
   function addRun(k,side,f){
@@ -266,7 +286,13 @@ function App() {
   // ── 預備表操作 ──
   function addPrepP(k,side,f){
     if(!requireOp()) return false;
-    if(prepLeft(k,side)<=0){ alert("此班該梯次已無可收名額。"); return false; }
+    if(side==="R"){ alert("預備表不收補考/機車，補考/機車請在正期班表登記。"); return false; }
+    if(!prepHasDate(side)){ alert(`新生 ${side} 尚未設定開訓日，無法登記。\n請先用電腦版設定開訓日（依開訓日才能正確計算每車人數）。`); return false; }
+    if(prepLeft(k,side)<=0){
+      const prev=prepPrevCount(k,side); const oc=cell(k);
+      alert(`此班新生${side}已達上限。\n升期後同車的前一梯 ${prev} 人＋補考機車 ${oc.R.length} 人，本梯最多收 ${Math.max(0,SEAT_CAP-prev-oc.R.length)} 人。新生報名不可超額。`);
+      return false;
+    }
     const c = pcell(k);
     const person = { id:Date.now(), name:f.name, phone:f.phone, note:f.note };
     if(f.stop) person.stop = f.stop;
@@ -342,7 +368,9 @@ function App() {
     const c = store[k]||EMPTY();
     if(c.A.some(x=>samePerson(x,p))||c.B.some(x=>samePerson(x,p))||c.R.some(x=>samePerson(x,p))){ alert(`「${p.name}」已在此班，未重複加入。`); return; }
     if(toPrep){
-      if(prepLeft(k,side)<=0){ alert("此班該梯次已無可收名額。"); return; }
+      if(side==="R"){ alert("預備表不收補考/機車。"); return; }
+      if(!prepHasDate(side)){ alert(`新生 ${side} 尚未設定開訓日，無法貼上。請先用電腦版設定開訓日。`); return; }
+      if(prepLeft(k,side)<=0){ alert("此班新生已達上限，新生報名不可超額。"); return; }
     } else {
       const cnt=used(k);
       if(cnt>=SEAT_CAP+1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），無法再加。`); return; }
@@ -432,8 +460,13 @@ function App() {
               h("span",{style:{fontSize:20,fontWeight:900,color:r.summer?"#c2410c":"#1e293b"}},r.time),
               h("span",{style:{fontSize:13,color:r.summer?"#ea580c":"#94a3b8",fontWeight:r.summer?700:400}},r.summer?"☀暑期":r.label),
               prepMode
-                ? h("span",{style:{marginLeft:"auto",fontSize:14,color:"#6b7280",fontWeight:700}},`可收 A${pA}/B${pB}`)
-                : h("span",{style:{marginLeft:"auto",fontSize:15,fontWeight:800,color:lf<0?"#dc2626":lf<=2?"#d97706":"#059669"}}, lf<0?`超額${cnt}/${SEAT_CAP}`:`${cnt}/${SEAT_CAP}`),
+                ? (()=>{
+                    const ra=prepRaw(key,"A"), rb=prepRaw(key,"B");
+                    const seg=(l,r)=> r<0?`${l}已超收${-r}`:r===0?`${l}已額滿`:`${l}尚可收${r}`;
+                    const bad = ra<=0||rb<=0;
+                    return h("span",{style:{marginLeft:"auto",fontSize:13,fontWeight:700,color:bad?"#dc2626":"#059669",textAlign:"right"}},`${seg("A",ra)}　${seg("B",rb)}`);
+                  })()
+                : h("span",{style:{marginLeft:"auto",fontSize:14,fontWeight:800,color:lf<0?"#dc2626":lf<=2?"#d97706":"#059669"}}, lf<0?`共${cnt}/${SEAT_CAP}（超額${-lf}）`:`共${cnt}/${SEAT_CAP} 剩${lf}`),
               clip&&clip.scope==="car"?h("button",{onClick:()=>{
                   const ps=clip.person.side||"A";
                   if(prepMode && ps==="R"){ alert("補考/機車生請貼到營運班表，預備表不收補考/機車。"); return; }
