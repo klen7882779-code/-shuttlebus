@@ -230,6 +230,12 @@ function Counter() {
   }
   // 該新生梯是否已設開訓日（沒設不能新增）
   function prepHasDate(side){ return side==="A" ? !!prepDateA : !!prepDateB; }
+  // 真實可收數（可為負，供顯示「已超收N位」）
+  function prepRaw(k, side){
+    const oc = data[k]||EMPTY();
+    const pc = prep[k]||EMPTY();
+    return SEAT_CAP - prepPrevCount(k, side) - oc.R.length - pc[side].length;
+  }
 
   // ── 共用額度函式已移除：改為「營運端可超額11、預備端硬擋10」的分別規則 ──
 
@@ -917,7 +923,7 @@ function Counter() {
         grid,days,isOpenFn,toggleOpen,selRoute,
         cellOf:pcell, leftOf:(k)=>Math.min(prepLeft(k,"A"),prepLeft(k,"B")),
         labelA:prepNameA(), labelB:prepNameB(),
-        prepMode:true, prepLeftFn:prepLeft,
+        prepMode:true, prepLeftFn:prepLeft, prepRawFn:prepRaw,
         addP:addPrep, removeP:removePrep, editP:editPrep, labelOf:prepLabelOf,
         clip, startCopyCell, startCopyDay, startCopyPerson, pasteToCell, pasteToDay, cancelCopy,
       }),
@@ -1070,7 +1076,7 @@ function RouteFilter({ selRoute, setSelRoute }){
   );
 }
 
-function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
+function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,prepRawFn,addP,removeP,editP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
   const copying = !!clip;
   const srcLabel = clip ? (clip.mode==="day" ? `週${DAY_NAME[clip.day]} 整天` : clip.mode==="person" ? clip.person.name : "單一班次") : "";
   // 整天沒有任何班次的日子（例如平日的週三）→ 顯示「接駁車休息」
@@ -1125,7 +1131,13 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
                 h("span",{style:{fontSize:15,fontWeight:800,color:"#1e293b",background:"#f1f5f9",borderRadius:5,padding:"1px 7px",marginRight:2}},time),
                 h("span",{style:{fontSize:15,fontWeight:700,color:route.color}},route.name),
                 prepMode
-                  ? h("span",{style:{fontSize:14,color:"#9ca3af",marginLeft:"auto"}},`可收 A${pLeftA}位/B${pLeftB}位`)
+                  ? (()=>{
+                      const ra = prepRawFn?prepRawFn(key,"A"):pLeftA, rb = prepRawFn?prepRawFn(key,"B"):pLeftB;
+                      const seg=(lbl,r)=> r<0 ? h("span",{style:{color:"#dc2626",fontWeight:800}},`${lbl}已超收${-r}位`)
+                                        : r===0 ? h("span",{style:{color:"#dc2626",fontWeight:800}},`${lbl}滿`)
+                                        : h("span",{style:{color:"#059669",fontWeight:700}},`${lbl}可收${r}`);
+                      return h("span",{style:{fontSize:14,marginLeft:"auto",display:"flex",gap:10}}, seg("A",ra), seg("B",rb));
+                    })()
                   : (()=>{ const cc=cellOf(key); const tot=cc.A.length+cc.B.length+cc.R.length;
                       return h("span",{style:{fontSize:14,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},lfShow<0?`超額${tot}/${SEAT_CAP}`:"剩"+lfShow); })(),
               ),
