@@ -462,9 +462,8 @@ function App() {
               prepMode
                 ? (()=>{
                     const ra=prepRaw(key,"A"), rb=prepRaw(key,"B");
-                    const seg=(l,r)=> r<0?`${l}已超收${-r}`:r===0?`${l}已額滿`:`${l}尚可收${r}`;
-                    const bad = ra<=0||rb<=0;
-                    return h("span",{style:{marginLeft:"auto",fontSize:13,fontWeight:700,color:bad?"#dc2626":"#059669",textAlign:"right"}},`${seg("A",ra)}　${seg("B",rb)}`);
+                    const seg=(l,r)=> h("span",{style:{color:r<=0?"#dc2626":"#059669",fontWeight:800}}, r<0?`${l}已超收${-r}`:r===0?`${l}已額滿`:`${l}尚可收${r}`);
+                    return h("span",{style:{marginLeft:"auto",fontSize:13,textAlign:"right",display:"flex",gap:8}}, seg("A",ra), seg("B",rb));
                   })()
                 : h("span",{style:{marginLeft:"auto",fontSize:14,fontWeight:800,color:lf<0?"#dc2626":lf<=2?"#d97706":"#059669"}}, lf<0?`共${cnt}/${SEAT_CAP}（超額${-lf}）`:`共${cnt}/${SEAT_CAP} 剩${lf}`),
               clip&&clip.scope==="car"?h("button",{onClick:()=>{
