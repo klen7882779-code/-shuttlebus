@@ -261,7 +261,7 @@ function Counter() {
     if(pw===null) return;
     if(pw!==CLEAR_PASSWORD){ alert("清空密碼錯誤，未執行。"); return; }
     if(!confirm(`確定清空「${mLabel(which)}」共 ${total} 位？\n（清空前系統會先自動備份，誤按可在「異動紀錄」頁還原）`)) return;
-    const ok = await writeBackup({ data, prep, motoW, archive, staff }, `清空${mLabel(which)}`, who());
+    const ok = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `清空${mLabel(which)}`, who());
     if(!ok){ alert("備份失敗，為避免資料遺失已中止清空。請檢查網路後再試一次。"); return; }
     mSet(which,{});
     writeLog({who:who(),act:"清空機車班",slot:mLabel(which),name:`${total}位`});
@@ -338,7 +338,7 @@ function Counter() {
       const srcKeys=Object.keys(src).filter(k=>{ const parts=k.split("_"); return Number(parts[1])===mclip.day && (src[k]||{L:[]}).L.length>0; });
       if(srcKeys.length===0){ alert("來源那天沒有名單。"); mCancelCopy(); return; }
       // 備份：機車整天複製前存一份完整快照
-      const bk = await writeBackup({ data, prep, motoW, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
+      const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of srcKeys){
         const parts=k.split("_"); const t=parts[2];
@@ -494,7 +494,7 @@ function Counter() {
     if(!confirm(`確定升期？\n「${oldName}」全部退場封存，「${newName}」${moved} 位升上車。`)) return;
 
     // 備份：升期前存一份完整快照（data/prep/motoW/archive/staff）；備份沒成功就中止，絕不硬做
-    const ok = await writeBackup({ data, prep, motoW, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
+    const ok = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
     if(!ok){ alert("備份失敗，為避免資料遺失已中止升期。請檢查網路後再試一次。"); return; }
 
     // 執行：營運該欄 <- 預備該欄；舊營運該欄 -> 封存
@@ -697,7 +697,7 @@ function Counter() {
       if(realSrc.length===0){ alert("來源那天沒有任何乘客。"); cancelCopy(); return; }
       if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）`)) return;
       // 備份：大量複製（整天）前存一份完整快照
-      const bk = await writeBackup({ data, prep, motoW, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
+      const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of realSrc){
         const [r,,t]=k.split("_");
@@ -1322,16 +1322,16 @@ function LogPage() {
   }
 
   // 還原：用選定的備份快照，整包覆蓋 data/prep/motoW/archive/staff
-  // （梯次期數 numA/numB/prepNumA/prepNumB 與暑期設定 summer 不受影響）
+  // （梯次期數 numA/numB/prepNumA/prepNumB 與暑期設定 summer 不受影響；開訓日隨快照還原，舊備份無紀錄則沿用現況）
   async function restoreBackup(b){
     const when = fmt(b.t);
-    if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車各週名單、封存名單、員工名單。\n（不影響梯次期數與暑期開關）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
+    if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車各週名單、封存名單、員工名單、預備與營運開訓日。\n（不影響梯次期數與暑期開關；若是較舊的備份沒有開訓日紀錄，開訓日會維持現在的值不動）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
     setRestoring(true);
     try{
       // 還原前，先把目前狀態存一份備份（保險）；這份沒存成就不能還原，否則還原錯了救不回來
       const cur = main || {};
       const safeOk = await writeBackup(
-        { data:cur.data||{}, prep:cur.prep||{}, motoW:cur.motoW||{}, archive:cur.archive||[], staff:cur.staff||[] },
+        { data:cur.data||{}, prep:cur.prep||{}, motoW:cur.motoW||{}, prepDateA:cur.prepDateA||"", prepDateB:cur.prepDateB||"", numDateA:cur.numDateA||"", numDateB:cur.numDateB||"", archive:cur.archive||[], staff:cur.staff||[] },
         "還原前自動備份", "系統"
       );
       if(!safeOk){ alert("無法先備份目前狀態，為安全起見已中止還原。請檢查網路後再試一次。"); setRestoring(false); return; }
@@ -1343,9 +1343,14 @@ function LogPage() {
         // 名單類：用備份快照覆蓋
         data: s.data||{}, prep: s.prep||{}, motoW: s.motoW||{},
         archive: s.archive||[], staff: s.staff||[],
+        // 開訓日：舊備份沒有這欄位時，沿用目前值（避免退回成空白）；新備份有的話就照快照還原
+        prepDateA: (s.prepDateA!==undefined ? s.prepDateA : base.prepDateA) || "",
+        prepDateB: (s.prepDateB!==undefined ? s.prepDateB : base.prepDateB) || "",
+        numDateA: (s.numDateA!==undefined ? s.numDateA : base.numDateA) || "",
+        numDateB: (s.numDateB!==undefined ? s.numDateB : base.numDateB) || "",
         // 期數／暑期：沿用目前值（備份不含這些，維持現況）
         numA: num(base.numA,459), numB: num(base.numB,458),
-        prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"", numDateA: base.numDateA||"", numDateB: base.numDateB||"",
+        prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
         summer: !!base.summer,
         updatedAt: Date.now(),
       };
