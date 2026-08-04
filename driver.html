@@ -37,6 +37,8 @@ function Driver() {
   const [data, setData] = useState({});
   const [prep, setPrep] = useState({});
   const [prepNumA, setPrepNumA] = useState(460);
+  const [prepDateA, setPrepDateA] = useState("");
+  const [prepDateB, setPrepDateB] = useState("");
   const [prepNumB, setPrepNumB] = useState(459);
   const [view, setView] = useState("run"); // run=現期營運 / prep=新生預備
   const [moto, setMoto] = useState({});
@@ -55,6 +57,8 @@ function Driver() {
         if(typeof v.numA==="number")setNumA(v.numA);
         if(typeof v.numB==="number")setNumB(v.numB);
         if(typeof v.prepNumA==="number")setPrepNumA(v.prepNumA);
+        setPrepDateA(v.prepDateA||"");
+        setPrepDateB(v.prepDateB||"");
         if(typeof v.prepNumB==="number")setPrepNumB(v.prepNumB);
       }
       setLoaded(true);
@@ -63,6 +67,7 @@ function Driver() {
   }, []);
 
   const isPrep = view==="prep";
+  const fmtMD = (d)=>{ if(!d) return ""; const [,m,dd]=d.split("-"); return `${parseInt(m,10)}/${parseInt(dd,10)}`; };
   const src = isPrep ? prep : data;
   const labelOf=(s)=> isPrep
     ? (s==="A"?`${prepNumA}A` : s==="B"?`${prepNumB}B` : "補考/機車")
@@ -95,7 +100,11 @@ function Driver() {
       h("button",{onClick:()=>setView("run"),style:{flex:1,padding:"10px",borderRadius:10,border:isPrep?"1px solid #e5e7eb":"none",background:isPrep?"#fff":"#2563eb",color:isPrep?"#374151":"#fff",fontSize:15,fontWeight:800,cursor:"pointer"}},"現期營運"),
       h("button",{onClick:()=>setView("prep"),style:{flex:1,padding:"10px",borderRadius:10,border:isPrep?"none":"1px solid #e5e7eb",background:isPrep?"#0891b2":"#fff",color:isPrep?"#fff":"#0e7490",fontSize:15,fontWeight:800,cursor:"pointer"}},"新生預備（下期）"),
     ),
-    isPrep ? h("div",{style:{background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:13,color:"#0e7490"}},"這是下一期的新生名單，供提前準備參考；實際出車以「現期營運」為準。機車班不在此顯示。") : null,
+    isPrep ? h("div",{style:{background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:13,color:"#0e7490"}},
+      h("div",null,"這是下一期的新生名單，供提前準備參考；實際出車以「現期營運」為準。機車班不在此顯示。"),
+      h("div",{style:{marginTop:4,fontWeight:700}},
+        `${prepNumA}A 開訓 ${prepDateA?fmtMD(prepDateA):"未設定"}　${prepNumB}B 開訓 ${prepDateB?fmtMD(prepDateB):"未設定"}`),
+    ) : null,
     // 當期梯次圖例
     h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10,fontSize:12}},
       tag("A",labelOf("A")), tag("B",labelOf("B")), tag("R","補考/機車"),
