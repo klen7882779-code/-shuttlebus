@@ -334,21 +334,28 @@ function App() {
   // ── 複製一個人 → 貼到別的班/天 ──
   const samePerson=(a,b)=> (a.name||"").trim()===(b.name||"").trim() && (a.phone||"").trim()===(b.phone||"").trim();
   function copyMoto(p){ setClip({ scope:"moto", person:{name:p.name,phone:p.phone||"",note:p.note||""} }); }
-  // 貼到汽車某班某梯
-  function pasteCar(k,side){
+  // 貼到汽車某班某梯（toPrep=true 時貼進預備表）
+  function pasteCar(k,side,toPrep){
     if(!requireOp()||!clip) return;
     const p=clip.person;
-    const c=cell(k);
+    const store = toPrep?prep:data;
+    const c = store[k]||EMPTY();
     if(c.A.some(x=>samePerson(x,p))||c.B.some(x=>samePerson(x,p))||c.R.some(x=>samePerson(x,p))){ alert(`「${p.name}」已在此班，未重複加入。`); return; }
-    const cnt=used(k);
-    if(cnt>=SEAT_CAP+1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），無法再加。`); return; }
-    if(cnt>=SEAT_CAP && !confirm(`此班表定 ${SEAT_CAP} 位已滿，確定超額貼上第 ${cnt+1} 位？`)) return;
+    if(toPrep){
+      if(prepLeft(k,side)<=0){ alert("此班該梯次已無可收名額。"); return; }
+    } else {
+      const cnt=used(k);
+      if(cnt>=SEAT_CAP+1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），無法再加。`); return; }
+      if(cnt>=SEAT_CAP && !confirm(`此班表定 ${SEAT_CAP} 位已滿，確定超額貼上第 ${cnt+1} 位？`)) return;
+    }
     const stops=ROUTE_STOPS[k.split("_")[0]];
     const person={ id:Date.now(), name:p.name, phone:p.phone, note:p.note };
     if(stops) person.stop = (p.stop && stops.includes(p.stop))?p.stop:stops[0];
-    const next={ ...data, [k]:{ ...c, [side]:[...c[side], person] } };
-    setData(next); persist({data:next});
-    writeLog({ who:who(), act:"複製", slot:slotDesc(k), side, name:p.name });
+    const next={ ...store, [k]:{ ...c, [side]:[...c[side], person] } };
+    if(toPrep){ setPrep(next); persist({prep:next}); }
+    else { setData(next); persist({data:next}); }
+    writeLog({ who:who(), act:toPrep?"預備複製":"複製", slot:slotDesc(k), side, name:p.name });
+    alert(`已將「${p.name}」貼到 ${slotDesc(k)}。`);
   }
   // 貼到機車某時段
   function pasteMoto(k){
@@ -359,6 +366,7 @@ function App() {
     const next={ ...store, [k]:{ L:[...c.L, { id:Date.now(), name:p.name, phone:p.phone, note:p.note }] } };
     mSetStore(next);
     writeLog({ who:who(), act:"機車複製", slot:weekLabel(shownWeek)+"・"+k.replace("moto_","週").replace("_"," "), name:p.name });
+    alert(`已將「${p.name}」貼到 ${weekLabel(shownWeek)} 週${DAY_NAME[k.split("_")[1]]} ${k.split("_")[2]}。`);
     if(next[k].L.length>MOTO_CAP) alert("此時段已超過 "+MOTO_CAP+" 位，請自行安排。");
   }
 
@@ -429,7 +437,7 @@ function App() {
               clip&&clip.scope==="car"?h("button",{onClick:()=>{
                   const ps=clip.person.side||"A";
                   if(prepMode && ps==="R"){ alert("補考/機車生請貼到營運班表，預備表不收補考/機車。"); return; }
-                  pasteCar(key, prepMode?(ps==="R"?"A":ps):ps);
+                  pasteCar(key, prepMode?(ps==="R"?"A":ps):ps, prepMode);
                 },style:{...bigBtn(prepMode?"#0891b2":"#2563eb"),padding:"8px 12px",fontSize:14}},"貼到這"):null,
             ),
             cnt===0?h("div",{style:{padding:"14px",color:"#cbd5e1",fontSize:15,borderTop:"1px solid #f1f5f9"}},"（無登記）")
