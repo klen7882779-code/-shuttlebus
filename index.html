@@ -1139,7 +1139,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
                       return h("span",{style:{fontSize:14,marginLeft:"auto",display:"flex",gap:10}}, seg("A",ra), seg("B",rb));
                     })()
                   : (()=>{ const cc=cellOf(key); const tot=cc.A.length+cc.B.length+cc.R.length;
-                      return h("span",{style:{fontSize:14,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},lfShow<0?`超額${tot}/${SEAT_CAP}`:"剩"+lfShow); })(),
+                      return h("span",{style:{fontSize:14,color:lfShow<=0?"#dc2626":lfShow<=2?"#d97706":"#059669",fontWeight:700,marginLeft:"auto"}},lfShow<0?`共${tot}/${SEAT_CAP}（超額${-lfShow}）`:`共${tot}/${SEAT_CAP}　剩${lfShow}`); })(),
               ),
               h("div",{style:{fontSize:14,color:"#6b7280",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}},
                 h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}位`),
@@ -1262,7 +1262,10 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, prepMod
       h("button",{onClick:()=>setSide("B"),style:sideBtn(side==="B",SIDE_COLORS.B)},labelOf("B")),
       prepMode?null:h("button",{onClick:()=>setSide("R"),style:sideBtn(side==="R",SIDE_COLORS.R)},"補考/機車"),
     ),
-    prepMode?h("div",{style:{fontSize:14,color:sideLeft<=0?"#dc2626":"#6b7280",marginTop:4}},`${labelOf(side)} 這班還可收 ${sideLeft} 位`):null,
+    prepMode?h("div",{style:{fontSize:14,marginTop:4,display:"flex",gap:14,flexWrap:"wrap"}},
+      h("span",{style:{color:pLeftA<=0?"#dc2626":"#059669",fontWeight:700}}, pLeftA<=0?`${labelOf("A")} 已額滿`:`${labelOf("A")} 尚可收 ${pLeftA} 人`),
+      h("span",{style:{color:pLeftB<=0?"#dc2626":"#059669",fontWeight:700}}, pLeftB<=0?`${labelOf("B")} 已額滿`:`${labelOf("B")} 尚可收 ${pLeftB} 人`),
+    ):null,
     h("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
       h("input",{placeholder:"姓名",value:name,onChange:(e)=>setName(e.target.value),style:inS(60)}),
       h("input",{placeholder:"電話",value:phone,onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:inS(92)}),
