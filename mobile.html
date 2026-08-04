@@ -120,9 +120,9 @@ function PersonRow({ p, side, stops, labelOf, onEdit, onDel, onCopy }) {
 }
 
 // ── 加人表單 ──────────────────────────────
-function AddForm({ route, prepMode, labelOf, canAddSide, onAdd, isOverFn }) {
+function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOverFn }) {
   const [open,setOpen] = useState(false);
-  const [side,setSide] = useState("A");
+  const [side,setSide] = useState(motoMode?"R":"A");
   const [name,setName] = useState(""); const [phone,setPhone] = useState(""); const [note,setNote] = useState("");
   const stops = ROUTE_STOPS[route.id];
   const [stop,setStop] = useState(stops?stops[0]:"");
@@ -145,7 +145,7 @@ function AddForm({ route, prepMode, labelOf, canAddSide, onAdd, isOverFn }) {
     setOpen(false);
   }
   return h("div",{style:{padding:"12px 14px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}},
-    h("div",{style:{display:"flex",gap:6,marginBottom:10}},
+    motoMode ? null : h("div",{style:{display:"flex",gap:6,marginBottom:10}},
       h("button",{onClick:()=>setSide("A"),style:{...pill(side==="A",SIDE_COLORS.A),flex:1,textAlign:"center"}},labelOf("A")),
       h("button",{onClick:()=>setSide("B"),style:{...pill(side==="B",SIDE_COLORS.B),flex:1,textAlign:"center"}},labelOf("B")),
       prepMode?null:h("button",{onClick:()=>setSide("R"),style:{...pill(side==="R",SIDE_COLORS.R),flex:1,textAlign:"center"}},"補考/機車"),
@@ -430,7 +430,7 @@ function App() {
               list.length===0?h("div",{style:{padding:"14px",color:"#cbd5e1",fontSize:15,borderTop:"1px solid #f1f5f9"}},"（無登記）")
                 : list.map(p=>h(PersonRow,{key:p.id,p,side:"R",stops:null,labelOf:()=>"機車",
                     onEdit:(f)=>editMotoP(key,p.id,f), onDel:()=>delMotoP(key,p.id), onCopy:()=>copyMoto(p)})),
-              h(AddForm,{route:{id:"moto"},prepMode:true,labelOf:()=>"機車",
+              h(AddForm,{route:{id:"moto"},motoMode:true,labelOf:()=>"機車",
                 canAddSide:()=>true, onAdd:(s,f)=>addMotoP(key,f)}),
             );
           }),
