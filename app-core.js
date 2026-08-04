@@ -47,6 +47,8 @@ export async function writeBackup(snapshot, trigger, whoName) {
     clean = sanitize({
       data: snapshot.data || {}, prep: snapshot.prep || {},
       motoW: snapshot.motoW || {},
+      prepDateA: snapshot.prepDateA || "", prepDateB: snapshot.prepDateB || "",
+      numDateA: snapshot.numDateA || "", numDateB: snapshot.numDateB || "",
       archive: snapshot.archive || [], staff: snapshot.staff || [],
     });
   } catch (e) {
