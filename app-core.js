@@ -201,32 +201,46 @@ export function buildMotoGrid(){
     days: MOTO_DAYS.map(day => ({ day, time: slot.time })),
   }));
 }
-export function NameList({ c, route, readOnly, removeP, editP, cKey, hideR, onCopyPerson }) {
+export function NameList({ c, route, readOnly, removeP, editP, moveP, cKey, hideR, onCopyPerson }) {
   const stops = ROUTE_STOPS[route.id];
   return h("div", { style:{ marginTop:4 } },
-    c.A.map(p=>h(NameRow,{key:p.id,p,side:"A",stops,readOnly,removeP,editP,cKey,onCopyPerson})),
-    c.B.map(p=>h(NameRow,{key:p.id,p,side:"B",stops,readOnly,removeP,editP,cKey,onCopyPerson})),
-    hideR?null:c.R.map(p=>h(NameRow,{key:p.id,p,side:"R",stops,readOnly,removeP,editP,cKey,onCopyPerson})),
+    c.A.map(p=>h(NameRow,{key:p.id,p,side:"A",stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson})),
+    c.B.map(p=>h(NameRow,{key:p.id,p,side:"B",stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson})),
+    hideR?null:c.R.map(p=>h(NameRow,{key:p.id,p,side:"R",stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson})),
   );
 }
 
-function NameRow({ p, side, stops, readOnly, removeP, editP, cKey, onCopyPerson }) {
+function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cKey, onCopyPerson }) {
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState(p.name);
   const [phone, setPhone] = useState(p.phone||"");
   const [note, setNote] = useState(p.note||"");
   const [stop, setStop] = useState(p.stop || (stops?stops[0]:""));
+  const [moveSide, setMoveSide] = useState(side); // 編輯時可改的目標梯次
 
   if(edit){
-    const save=()=>{ if(!name.trim())return; editP(cKey,side,p.id,{name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined}); setEdit(false); };
+    const save=()=>{
+      if(!name.trim())return;
+      if(moveSide!==side && moveP){
+        // 梯次有變更：換梯（含容量檢查），同時把姓名/電話/備註/上車站一併更新
+        moveP(cKey, side, moveSide, p.id, {name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined});
+      } else {
+        editP(cKey,side,p.id,{name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined});
+      }
+      setEdit(false);
+    };
+    const sideOptions = prepMode ? ["A","B"] : ["A","B","R"];
+    const sideLabel = (s)=> s==="R" ? "補考/機車" : s;
     return h("div",{style:{display:"flex",alignItems:"center",gap:4,padding:"4px 0",flexWrap:"wrap"}},
       h("span",{style:{width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0}}),
+      moveP ? h("select",{value:moveSide,onChange:(e)=>setMoveSide(e.target.value),title:"梯次（可切換）",style:{padding:"3px 4px",borderRadius:5,border:"1px solid #93c5fd",fontSize:13,background:"#fff",color:SIDE_COLORS[moveSide],fontWeight:700}},
+        sideOptions.map(s=>h("option",{key:s,value:s},sideLabel(s)))) : null,
       h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:66,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:{width:96,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),style:{width:86,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:13,padding:"3px 8px",fontWeight:600}},"存"),
-      h("button",{onClick:()=>setEdit(false),style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:13}},"取消"),
+      h("button",{onClick:()=>{setMoveSide(side);setEdit(false);},style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:13}},"取消"),
     );
   }
 
