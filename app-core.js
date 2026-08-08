@@ -203,14 +203,17 @@ export function buildMotoGrid(){
 }
 export function NameList({ c, route, readOnly, removeP, editP, moveP, cKey, hideR, onCopyPerson }) {
   const stops = ROUTE_STOPS[route.id];
+  let i = 0;
+  const rows = [];
+  c.A.forEach(p=>rows.push({p,side:"A"}));
+  c.B.forEach(p=>rows.push({p,side:"B"}));
+  if(!hideR) c.R.forEach(p=>rows.push({p,side:"R"}));
   return h("div", { style:{ marginTop:4 } },
-    c.A.map(p=>h(NameRow,{key:p.id,p,side:"A",stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson})),
-    c.B.map(p=>h(NameRow,{key:p.id,p,side:"B",stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson})),
-    hideR?null:c.R.map(p=>h(NameRow,{key:p.id,p,side:"R",stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson})),
+    rows.map(({p,side})=>h(NameRow,{key:p.id,p,side,stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson,rowIndex:i++})),
   );
 }
 
-function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cKey, onCopyPerson }) {
+function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cKey, onCopyPerson, rowIndex }) {
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState(p.name);
   const [phone, setPhone] = useState(p.phone||"");
@@ -244,7 +247,12 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cK
     );
   }
 
-  return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:15,padding:"3px 0",flexWrap:"wrap" } },
+  const zebra = (rowIndex??0) % 2 === 1;
+  return h("div", { style:{ display:"flex",alignItems:"center",gap:4,fontSize:15,padding:"5px 6px",flexWrap:"wrap",
+      background: zebra ? "#f8fafc" : "#fff",
+      borderBottom:"1px solid #eef1f5",
+      borderRadius:4,
+    } },
     h("span", { style:{ width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0 } }),
     h("span", { style:{ fontWeight:700, color:SIDE_COLORS[side], whiteSpace:"nowrap" } }, p.name),
     side==="R" ? h("span", { style:{ fontSize:13,color:SIDE_COLORS.R,fontWeight:700,whiteSpace:"nowrap" } }, "補/機車") : null,
