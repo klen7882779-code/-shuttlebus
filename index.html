@@ -184,7 +184,7 @@ function Counter() {
       data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, archive, staff, summer,
       ...patch, updatedAt: Date.now(),
     };
-    try { await setDoc(DOC, payload); }
+    try { await setDoc(DOC, payload, { merge: true }); }
     catch(e){ console.error(e); alert("儲存失敗，請檢查網路"); }
     setSaving(false);
   }
@@ -561,8 +561,18 @@ function Counter() {
     const nextPrepNum = (side==="A"?prepNumA:prepNumB) + 1;
     const patch={ data:nextData, prep:nextPrep, archive:nextArchive };
     // 升期：把即將升上車的新生開訓日，帶上去存成營運開訓日（供四梯排序）
-    if(side==="A"){ patch.numA=newNum; patch.numDateA=startDate||""; patch.prepNumA=nextPrepNum; patch.prepDateA=""; setNumA(newNum); setNumDateA(startDate||""); setPrepNumA(nextPrepNum); setPrepDateA(""); }
-    else          { patch.numB=newNum; patch.numDateB=startDate||""; patch.prepNumB=nextPrepNum; patch.prepDateB=""; setNumB(newNum); setNumDateB(startDate||""); setPrepNumB(nextPrepNum); setPrepDateB(""); }
+    // 注意：只有新生「確實有設定」開訓日時才覆蓋；新生沒設開訓日就不動營運原本的開訓日，避免被洗成空白
+    if(side==="A"){
+      patch.numA=newNum; if(startDate) patch.numDateA=startDate;
+      patch.prepNumA=nextPrepNum; patch.prepDateA="";
+      setNumA(newNum); if(startDate) setNumDateA(startDate);
+      setPrepNumA(nextPrepNum); setPrepDateA("");
+    } else {
+      patch.numB=newNum; if(startDate) patch.numDateB=startDate;
+      patch.prepNumB=nextPrepNum; patch.prepDateB="";
+      setNumB(newNum); if(startDate) setNumDateB(startDate);
+      setPrepNumB(nextPrepNum); setPrepDateB("");
+    }
     setData(nextData); setPrep(nextPrep); setArchive(nextArchive);
     persist(patch);
     writeLog({ who:who(), act:"升期", slot:`${side}欄`, name:`${oldName} 退場 → ${newName} 上車（${moved}位）` });
@@ -1352,7 +1362,7 @@ function LogPage() {
       prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"", numDateA: base.numDateA||"", numDateB: base.numDateB||"",
       archive: base.archive||[], staff: list, summer: !!base.summer,
       updatedAt: Date.now(),
-    });
+    }, { merge: true });
   }
   function addStaff(){
     const n=newName.trim();
@@ -1396,7 +1406,7 @@ function LogPage() {
         summer: !!base.summer,
         updatedAt: Date.now(),
       };
-      await setDoc(DOC, patch);
+      await setDoc(DOC, patch, { merge: true });
       writeLog({ who:"管理員", act:"還原備份", slot:b.trigger, name:when });
       alert("已還原完成。");
     } catch(e){ console.error(e); alert("還原失敗，請檢查網路後再試一次。"); }
