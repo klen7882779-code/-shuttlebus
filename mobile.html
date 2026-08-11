@@ -213,7 +213,7 @@ function App() {
   async function persist(patch){
     try{
       const base = { data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, archive, staff, summer };
-      await setDoc(DOC, { ...base, ...patch, updatedAt: Date.now() });
+      await setDoc(DOC, { ...base, ...patch, updatedAt: Date.now() }, { merge: true });
     }catch(e){ console.error(e); alert("儲存失敗，請檢查網路後再試一次。"); }
   }
 
