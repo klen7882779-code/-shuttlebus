@@ -124,6 +124,7 @@ function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOver
   const [open,setOpen] = useState(false);
   const [side,setSide] = useState(motoMode?"R":"A");
   const [name,setName] = useState(""); const [phone,setPhone] = useState(""); const [note,setNote] = useState("");
+  const [rideDate,setRideDate] = useState(""); // R 專用搭車日期
   const stops = ROUTE_STOPS[route.id];
   const [stop,setStop] = useState(stops?stops[0]:"");
   const [tip,setTip] = useState("");
@@ -138,9 +139,10 @@ function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOver
   const over = isOverFn && isOverFn(side);
   function submit(){
     const nm=name.trim(); if(!nm) return;
-    const done = onAdd(side,{name:nm,phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined});
+    if(side==="R" && !rideDate){ alert("補考/機車請填寫搭車日期。"); return; }
+    const done = onAdd(side,{name:nm,phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined,rideDate:side==="R"?rideDate:undefined});
     if(done===false) return;
-    setName("");setPhone("");setNote("");
+    setName("");setPhone("");setNote("");setRideDate("");
     setTip(nm); setTimeout(()=>setTip(""),8000);
     setOpen(false);
   }
@@ -153,6 +155,7 @@ function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOver
     h("input",{value:name,onChange:(e)=>setName(e.target.value),placeholder:"姓名",style:{...inputS,marginBottom:8}}),
     h("input",{value:phone,inputMode:"tel",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),placeholder:"電話",style:{...inputS,marginBottom:8}}),
     h("input",{value:note,onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),placeholder:"備註（首堂日…）",style:{...inputS,marginBottom:8}}),
+    (!prepMode && !motoMode && side==="R") ? h("input",{type:"date",value:rideDate,onChange:(e)=>setRideDate(e.target.value),style:{...inputS,marginBottom:8,border:rideDate?"1px solid #cbd5e1":"1px solid #dc2626"}}) : null,
     stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{...inputS,marginBottom:8}},
       stops.map(s=>h("option",{key:s,value:s},s))):null,
     h("div",{style:{display:"flex",gap:8}},
@@ -178,6 +181,7 @@ function App() {
   const [prepNumA,setPrepNumA] = useState(460); const [prepNumB,setPrepNumB] = useState(459);
   const [prepDateA,setPrepDateA] = useState(""); const [prepDateB,setPrepDateB] = useState("");
   const [numDateA,setNumDateA] = useState(""); const [numDateB,setNumDateB] = useState("");
+  const [waitR,setWaitR] = useState({});
   const [archive,setArchive] = useState([]); const [staff,setStaff] = useState([]);
   const [summer,setSummer] = useState(false);
   const weeks = upcomingMondays(4);
@@ -198,6 +202,7 @@ function App() {
         if(typeof v.prepNumB==="number") setPrepNumB(v.prepNumB);
         setPrepDateA(v.prepDateA||""); setPrepDateB(v.prepDateB||"");
         setNumDateA(v.numDateA||""); setNumDateB(v.numDateB||"");
+        setWaitR(v.waitR||{});
       }
       setLoaded(true);
     },(e)=>{ console.error(e); setLoaded(true); });
@@ -212,7 +217,7 @@ function App() {
 
   async function persist(patch){
     try{
-      const base = { data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, archive, staff, summer };
+      const base = { data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff, summer };
       await setDoc(DOC, { ...base, ...patch, updatedAt: Date.now() }, { merge: true });
     }catch(e){ console.error(e); alert("儲存失敗，請檢查網路後再試一次。"); }
   }
@@ -248,6 +253,19 @@ function App() {
   // ── 營運表操作 ──
   function addRun(k,side,f){
     if(!requireOp()) return false;
+    if(side==="R"){
+      if(!f.rideDate){ alert("補考/機車請填寫搭車日期。"); return false; }
+      const cntR = used(k);
+      if(cntR >= SEAT_CAP+1){ alert(`此班已滿（${cntR}/${SEAT_CAP}）。\n補考/機車候補請改用電腦版加入候補名單。`); return false; }
+      const isOverR = cntR >= SEAT_CAP;
+      if(isOverR && !confirm(`此班表定 ${SEAT_CAP} 位已滿。\n確定要超額登記第 ${cntR+1} 位嗎？`)) return false;
+      const cR = cell(k);
+      const personR = { id:Date.now(), name:f.name, phone:f.phone, note:f.note, rideDate:f.rideDate };
+      const nextR = { ...data, [k]:{ ...cR, R:[...cR.R, personR] } };
+      setData(nextR); persist({data:nextR});
+      writeLog({ who:who(), act:isOverR?"超額新增":"新增", slot:slotDesc(k), side:"R", name:f.name });
+      return true;
+    }
     const cnt = used(k);
     if(cnt >= SEAT_CAP+1){ alert(`此班已超額（${cnt}/${SEAT_CAP}），最多只能超額 1 位。`); return false; }
     const isOver = cnt >= SEAT_CAP;
