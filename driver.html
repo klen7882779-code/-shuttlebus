@@ -223,6 +223,7 @@ function personRow(p, side, route, sideLabel){
   return h("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f6f6f6",flexWrap:"wrap"}},
     h("span",{style:{background:TAG_BG[side],color:TAG_FG[side],borderRadius:5,padding:"2px 7px",fontSize:12,fontWeight:700,flexShrink:0}}, sideLabel),
     h("span",{style:{fontSize:15,fontWeight:700,minWidth:54}},p.name),
+    p.rideDate ? h("span",{style:{fontSize:12,color:"#fff",background:"#0891b2",borderRadius:5,padding:"1px 7px",fontWeight:700}},"搭車"+p.rideDate.slice(5).replace("-","/")) : null,
     stops && p.stop ? h("span",{style:{fontSize:12,color:"#475569",background:"#f1f5f9",borderRadius:5,padding:"1px 7px"}},"上車："+p.stop) : null,
     p.phone ? h("a",{href:`tel:${p.phone}`,className:"tel",style:{fontSize:13,color:"#2563eb",background:"#eff6ff",borderRadius:5,padding:"3px 9px",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}},"📞 "+p.phone) : null,
     p.note ? h("span",{style:{fontSize:12,color:"#0e7490",background:"#ecfeff",borderRadius:5,padding:"2px 7px"}},"備註："+p.note) : null,
