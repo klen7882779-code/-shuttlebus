@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion,
   collection, addDoc, query, where, orderBy, getDocs, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import React, { useState, useEffect, useMemo } from "https://esm.sh/react@18.2.0";
+import React, { useState, useEffect, useMemo, useRef } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
 
 const firebaseConfig = {
@@ -20,7 +20,7 @@ const DOC = doc(db, "shuttle", "main");
 const LOG = doc(db, "shuttle", "log");
 const BACKUP_COL = collection(db, "shuttle", "backup", "items"); // 每個關鍵操作前的完整快照，各自一個文件（避免單一文件超過 1MB 上限）
 export const h = React.createElement;
-export { useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, BACKUP_COL };
+export { useState, useEffect, useMemo, useRef, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, BACKUP_COL };
 
 // ── 異動紀錄：寫一筆 + 清掉 60 天前 ──────────────────
 const LOG_KEEP_MS = 60 * 24 * 60 * 60 * 1000; // 60 天
@@ -49,6 +49,7 @@ export async function writeBackup(snapshot, trigger, whoName) {
       motoW: snapshot.motoW || {},
       prepDateA: snapshot.prepDateA || "", prepDateB: snapshot.prepDateB || "",
       numDateA: snapshot.numDateA || "", numDateB: snapshot.numDateB || "",
+      waitR: snapshot.waitR || {},
       archive: snapshot.archive || [], staff: snapshot.staff || [],
     });
   } catch (e) {
@@ -220,15 +221,21 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cK
   const [note, setNote] = useState(p.note||"");
   const [stop, setStop] = useState(p.stop || (stops?stops[0]:""));
   const [moveSide, setMoveSide] = useState(side); // 編輯時可改的目標梯次
+  const [rideDate, setRideDate] = useState(p.rideDate||""); // R 搭車日期（僅 R 顯示）
 
   if(edit){
     const save=()=>{
       if(!name.trim())return;
+      // R 若在編輯（且目標仍是 R）需有搭車日期
+      const isR = (moveSide==="R");
+      if(isR && !rideDate){ alert("補考/機車請填寫搭車日期。"); return; }
+      const fields = {name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined};
+      if(isR) fields.rideDate = rideDate;
       if(moveSide!==side && moveP){
-        // 梯次有變更：換梯（含容量檢查），同時把姓名/電話/備註/上車站一併更新
-        moveP(cKey, side, moveSide, p.id, {name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined});
+        // 梯次有變更：換梯（含容量檢查），同時把姓名/電話/備註/上車站/搭車日一併更新
+        moveP(cKey, side, moveSide, p.id, fields);
       } else {
-        editP(cKey,side,p.id,{name:name.trim(),phone:fmtPhone(phone),note:toHalfWidth(note).trim(),stop:stops?stop:undefined});
+        editP(cKey,side,p.id,fields);
       }
       setEdit(false);
     };
@@ -241,6 +248,7 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cK
       h("input",{value:name,onChange:(e)=>setName(e.target.value),style:{width:66,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       h("input",{value:phone,placeholder:"電話",onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:{width:96,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
       h("input",{value:note,placeholder:"備註",onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),style:{width:86,padding:"3px 6px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14}}),
+      (moveSide==="R") ? h("input",{type:"date",value:rideDate,onChange:(e)=>setRideDate(e.target.value),title:"搭車日期",style:{padding:"3px",borderRadius:5,border:rideDate?"1px solid #93c5fd":"1px solid #dc2626",fontSize:13}}) : null,
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"3px",borderRadius:5,border:"1px solid #93c5fd",fontSize:14,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
       h("button",{onClick:save,style:{border:"none",background:"#2563eb",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:13,padding:"3px 8px",fontWeight:600}},"存"),
       h("button",{onClick:()=>{setMoveSide(side);setEdit(false);},style:{border:"none",background:"none",color:"#9ca3af",cursor:"pointer",fontSize:13}},"取消"),
@@ -256,10 +264,11 @@ function NameRow({ p, side, stops, readOnly, removeP, editP, moveP, prepMode, cK
     h("span", { style:{ width:6,height:6,borderRadius:2,background:SIDE_COLORS[side],display:"inline-block",flexShrink:0 } }),
     h("span", { style:{ fontWeight:700, color:SIDE_COLORS[side], whiteSpace:"nowrap" } }, p.name),
     side==="R" ? h("span", { style:{ fontSize:13,color:SIDE_COLORS.R,fontWeight:700,whiteSpace:"nowrap" } }, "補/機車") : null,
+    (side==="R" && p.rideDate) ? h("span", { style:{ fontSize:13,color:"#0891b2",fontWeight:700,whiteSpace:"nowrap" } }, "搭車"+p.rideDate.slice(5).replace("-","/")) : null,
     p.phone ? h("span", { style:{ fontSize:13,color:"#9ca3af",whiteSpace:"nowrap" } }, p.phone) : null,
     stops && p.stop ? h("span", { style:{ fontSize:13,color:"#475569",background:"#f1f5f9",borderRadius:4,padding:"0 5px" } }, p.stop) : null,
     p.note ? h("span", { style:{ fontSize:13,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"0 5px" } }, p.note) : null,
-    !readOnly ? h("button", { onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setEdit(true);}, style:{ marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:14 } }, "改") : null,
+    !readOnly ? h("button", { onClick:()=>{setName(p.name);setPhone(p.phone||"");setNote(p.note||"");setStop(p.stop||(stops?stops[0]:""));setRideDate(p.rideDate||"");setMoveSide(side);setEdit(true);}, style:{ marginLeft:"auto",border:"none",background:"none",color:"#2563eb",cursor:"pointer",fontSize:14 } }, "改") : null,
     !readOnly && onCopyPerson ? h("button", { onClick:()=>onCopyPerson(cKey,side,p), style:{ border:"none",background:"none",color:"#d97706",cursor:"pointer",fontSize:14 } }, "複製") : null,
     !readOnly ? h("button", { onClick:()=>removeP(cKey,side,p.id), style:{ border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:14 } }, "✕") : null,
   );
