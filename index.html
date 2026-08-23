@@ -20,7 +20,7 @@
 
 <script type="module">
 import {
-  h, useState, useEffect, useMemo, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
+  h, useState, useEffect, useMemo, useRef, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
   tk, EMPTY, fmtPhone, toHalfWidth, mondayOf, weekLabel, upcomingMondays, mondayWeeksAgo, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
 } from "./app-core.js";
@@ -59,6 +59,7 @@ function Counter() {
   const [prepDateB, setPrepDateB] = useState(""); // 預備 B 開訓日 YYYY-MM-DD
   const [numDateA, setNumDateA] = useState("");   // 營運 A 開訓日
   const [numDateB, setNumDateB] = useState("");   // 營運 B 開訓日
+  const [waitR, setWaitR] = useState({});         // R候補名單：{ key: [{id,name,phone,note,rideDate}] }
   const [data, setData] = useState({});       // 營運名單
   const [motoW, setMotoW] = useState({}); // 機車滾動週名單：{ "YYYY-MM-DD(週一)": { motoKey: {L:[]} } }
   const weeks = upcomingMondays(4);       // 本週+未來三週（每次 render 重算，跨週自動滾動）
@@ -95,6 +96,7 @@ function Counter() {
         setPrepDateB(v.prepDateB||"");
         setNumDateA(v.numDateA||"");
         setNumDateB(v.numDateB||"");
+        setWaitR(v.waitR||{});
         setArchive(v.archive||[]);
         setStaff(v.staff||[]);
       }
@@ -181,7 +183,7 @@ function Counter() {
   async function persist(patch) {
     setSaving(true);
     const payload = {
-      data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, archive, staff, summer,
+      data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff, summer,
       ...patch, updatedAt: Date.now(),
     };
     try { await setDoc(DOC, payload, { merge: true }); }
@@ -196,6 +198,66 @@ function Counter() {
   const fmtMD = (d)=>{ if(!d) return ""; const [,m,dd]=d.split("-"); return `${parseInt(m,10)}/${parseInt(dd,10)}`; };
   const cell=(k)=>data[k]||EMPTY();
   const used=(k)=>{const c=cell(k);return c.A.length+c.B.length+c.R.length;};
+
+  // ── R 到期自動檢查：頁面載入完成後跑一次（純前端，僅在有人開頁面時觸發）──
+  // 1) 正式R名單：搭車日已過 → 自動搬進封存（不刪除），空出位子
+  // 2) 候補R名單：搭車日已過還沒轉正 → 自動移除這筆候補請求（已無意義）
+  const rCheckRan = useRef(false);
+  useEffect(()=>{
+    if(!loaded || rCheckRan.current) return;
+    rCheckRan.current = true;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const isPast = (d)=>{ if(!d) return false; const dd=new Date(d); dd.setHours(0,0,0,0); return dd.getTime() < today.getTime(); };
+
+    // 1) 正式R過期搬封存
+    let movedR = [];
+    const nextData = {...data};
+    let dataChanged = false;
+    for(const k in nextData){
+      const c = nextData[k];
+      if(!c || !c.R || c.R.length===0) continue;
+      const stay = c.R.filter(p=>!isPast(p.rideDate));
+      const expired = c.R.filter(p=>isPast(p.rideDate));
+      if(expired.length>0){
+        dataChanged = true;
+        nextData[k] = {...c, R:stay};
+        expired.forEach(p=>movedR.push({ slot:slotDesc(k), side:"R", ...p }));
+      }
+    }
+    // 2) 候補R過期移除
+    let removedWait = [];
+    const nextWait = {...waitR};
+    let waitChanged = false;
+    for(const k in nextWait){
+      const list = nextWait[k]||[];
+      const stay = list.filter(p=>!isPast(p.rideDate));
+      const expired = list.filter(p=>isPast(p.rideDate));
+      if(expired.length>0){
+        waitChanged = true;
+        nextWait[k] = stay;
+        expired.forEach(p=>removedWait.push({ slot:slotDesc(k), ...p }));
+      }
+    }
+    if(!dataChanged && !waitChanged) return;
+
+    (async ()=>{
+      const patch = {};
+      if(dataChanged){
+        const now=Date.now();
+        const KEEP=30*24*60*60*1000;
+        const nextArchive=[...archive.filter(a=>now-a.t<KEEP), { t:now, cohort:"補考/機車自動下車", who:"系統", people:movedR }];
+        setData(nextData); setArchive(nextArchive);
+        patch.data = nextData; patch.archive = nextArchive;
+      }
+      if(waitChanged){
+        setWaitR(nextWait);
+        patch.waitR = nextWait;
+      }
+      await persist(patch);
+      if(movedR.length) writeLog({ who:"系統", act:"R自動下車", slot:"多筆", name:`共${movedR.length}位搭車日已過，已搬入封存` });
+      if(removedWait.length) writeLog({ who:"系統", act:"候補自動移除", slot:"多筆", name:`共${removedWait.length}筆候補搭車日已過，已自動移除` });
+    })();
+  }, [loaded]);
   const left=(k)=>SEAT_CAP-used(k);
 
   // 預備表 cell
@@ -261,7 +323,7 @@ function Counter() {
     if(pw===null) return;
     if(pw!==CLEAR_PASSWORD){ alert("清空密碼錯誤，未執行。"); return; }
     if(!confirm(`確定清空「${mLabel(which)}」共 ${total} 位？\n（清空前系統會先自動備份，誤按可在「異動紀錄」頁還原）`)) return;
-    const ok = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `清空${mLabel(which)}`, who());
+    const ok = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff }, `清空${mLabel(which)}`, who());
     if(!ok){ alert("備份失敗，為避免資料遺失已中止清空。請檢查網路後再試一次。"); return; }
     mSet(which,{});
     writeLog({who:who(),act:"清空機車班",slot:mLabel(which),name:`${total}位`});
@@ -338,7 +400,7 @@ function Counter() {
       const srcKeys=Object.keys(src).filter(k=>{ const parts=k.split("_"); return Number(parts[1])===mclip.day && (src[k]||{L:[]}).L.length>0; });
       if(srcKeys.length===0){ alert("來源那天沒有名單。"); mCancelCopy(); return; }
       // 備份：機車整天複製前存一份完整快照
-      const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
+      const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff }, `機車整天複製（${mLabel(which)}週${mclip.day}→週${destDay}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of srcKeys){
         const parts=k.split("_"); const t=parts[2];
@@ -366,9 +428,27 @@ function Counter() {
 
   // ── 營運表操作 ──
   // 座位規則：正期（營運A+B+R）表定 10、可超額到 11、12 硬擋
-  function addP(k,side,name,phone,stop,note){
+  function addP(k,side,name,phone,stop,note,rideDate){
     if(!requireOp())return;
     if(!name.trim())return;
+    if(side==="R"){
+      // R 必填搭車日期
+      if(!rideDate || !/^\d{4}-\d{2}-\d{2}$/.test(rideDate)){ alert("補考/機車請填寫搭車日期（格式 2026-08-15）。"); return; }
+      const cnt = used(k);
+      if(cnt >= SEAT_CAP + 1){
+        // 已達超額上限，改進候補名單
+        addWaitR(k, name, phone, note, rideDate);
+        return;
+      }
+      const isOver = cnt >= SEAT_CAP;
+      if(isOver && !confirm(`此班表定 ${SEAT_CAP} 位已滿。\n確定要「超額登記」第 ${cnt+1} 位嗎？（最多超額 1 位）`)) return;
+      const c=data[k]||EMPTY();
+      const person={id:Date.now(),name:name.trim(),phone:phone.trim(),note:(note||"").trim(),rideDate};
+      const next={...data,[k]:{...c,R:[...c.R,person]}};
+      setData(next);persist({data:next});
+      writeLog({ who:who(), act:isOver?"超額新增":"新增", slot:slotDesc(k), side, name:name.trim() });
+      return;
+    }
     const cnt = used(k); // 整格總數（A+B+R）
     if(cnt >= SEAT_CAP + 1){ alert(`此班已滿（${cnt}/${SEAT_CAP}，含補考機車），最多超額 1 位，無法再新增。`); return; }
     const isOver = cnt >= SEAT_CAP;
@@ -379,6 +459,44 @@ function Counter() {
     const next={...data,[k]:{...c,[side]:[...c[side],person]}};
     setData(next);persist({data:next});
     writeLog({ who:who(), act:isOver?"超額新增":"新增", slot:slotDesc(k), side, name:name.trim() });
+  }
+  // ── R 候補：加入候補名單（獨立存放於 waitR[key] = [{id,name,phone,note,rideDate}]）
+  function addWaitR(k, name, phone, note, rideDate){
+    const list = waitR[k]||[];
+    const person={id:Date.now(),name:name.trim(),phone:phone.trim(),note:(note||"").trim(),rideDate};
+    const next={...waitR,[k]:[...list,person]};
+    setWaitR(next);persist({waitR:next});
+    writeLog({ who:who(), act:"加入候補", slot:slotDesc(k), side:"R", name:`${name.trim()}（${fmtMD(rideDate)}）` });
+    alert(`此班已滿，「${name.trim()}」已加入候補名單（搭車日 ${fmtMD(rideDate)}），有空位時請手動「轉正」。`);
+  }
+  // 候補轉正：把候補的人搬進正式R（套用跟新增一樣的超額檢查）
+  function promoteWaitR(k, id){
+    if(!requireOp())return;
+    const list = waitR[k]||[];
+    const person = list.find(x=>x.id===id);
+    if(!person){ alert("找不到這筆候補，可能已被處理，請重新整理後再試。"); return; }
+    const cnt = used(k);
+    if(cnt >= SEAT_CAP + 1){ alert(`此班已滿（${cnt}/${SEAT_CAP}），無法轉正，請先確認有空位。`); return; }
+    const isOver = cnt >= SEAT_CAP;
+    if(isOver && !confirm(`此班表定 ${SEAT_CAP} 位已滿。\n確定要「超額」把「${person.name}」轉正嗎？（最多超額 1 位）`)) return;
+    if(!confirm(`確定把候補「${person.name}」（搭車日 ${fmtMD(person.rideDate)}）轉為正式登記嗎？`)) return;
+    const c=data[k]||EMPTY();
+    const newPerson={id:Date.now(),name:person.name,phone:person.phone,note:person.note,rideDate:person.rideDate};
+    const nextData={...data,[k]:{...c,R:[...c.R,newPerson]}};
+    const nextWait={...waitR,[k]:list.filter(x=>x.id!==id)};
+    setData(nextData);setWaitR(nextWait);
+    persist({data:nextData,waitR:nextWait});
+    writeLog({ who:who(), act:isOver?"候補轉正(超額)":"候補轉正", slot:slotDesc(k), side:"R", name:person.name });
+  }
+  // 候補移除（手動取消候補）
+  function removeWaitR(k, id){
+    if(!requireOp())return;
+    const list = waitR[k]||[];
+    const person = list.find(x=>x.id===id);
+    if(!confirm(`確定要取消候補「${person?person.name:""}」嗎？`)) return;
+    const next={...waitR,[k]:list.filter(x=>x.id!==id)};
+    setWaitR(next);persist({waitR:next});
+    writeLog({ who:who(), act:"取消候補", slot:slotDesc(k), side:"R", name:person?person.name:"" });
   }
   function removeP(k,side,id){
     if(!requireOp())return;
@@ -397,6 +515,7 @@ function Counter() {
       if(x.id!==id) return x;
       const nx={...x, name:fields.name.trim(), phone:(fields.phone||"").trim(), note:(fields.note||"").trim()};
       if(fields.stop) nx.stop=fields.stop; else delete nx.stop;
+      if(fields.rideDate!==undefined) nx.rideDate=fields.rideDate; // R 搭車日期可編輯
       return nx;
     });
     const next={...data,[k]:{...c,[side]:updated}};
@@ -415,6 +534,14 @@ function Counter() {
     if(isOver && !confirm(`此班表定 ${SEAT_CAP} 位已滿。\n確定要把「${target.name}」換到 ${toSide==="R"?"補考/機車":toSide} 嗎？（換梯不增加總人數，僅提醒目前已達上限）`)) return;
     const nx={...target, name:fields.name.trim(), phone:(fields.phone||"").trim(), note:(fields.note||"").trim()};
     if(fields.stop) nx.stop=fields.stop; else delete nx.stop;
+    // 搭車日期：換到 R 需有日期；換出 R（變 A/B）清掉 rideDate
+    if(toSide==="R"){
+      const rd = fields.rideDate || target.rideDate;
+      if(!rd){ alert("換成補考/機車需要搭車日期，請在編輯時填寫。"); return; }
+      nx.rideDate = rd;
+    } else {
+      delete nx.rideDate;
+    }
     const next={...data,[k]:{...c,
       [fromSide]: c[fromSide].filter(x=>x.id!==id),
       [toSide]: [...(fromSide===toSide?c[toSide].filter(x=>x.id!==id):c[toSide]), nx],
@@ -535,7 +662,7 @@ function Counter() {
     if(!confirm(`確定升期？\n「${oldName}」全部退場封存，「${newName}」${moved} 位升上車。`)) return;
 
     // 備份：升期前存一份完整快照（data/prep/motoW/archive/staff）；備份沒成功就中止，絕不硬做
-    const ok = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
+    const ok = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff }, `升期${side}（${oldName}→${newName}）`, who());
     if(!ok){ alert("備份失敗，為避免資料遺失已中止升期。請檢查網路後再試一次。"); return; }
 
     // 執行：營運該欄 <- 預備該欄；舊營運該欄 -> 封存
@@ -748,7 +875,7 @@ function Counter() {
       if(realSrc.length===0){ alert("來源那天沒有任何乘客。"); cancelCopy(); return; }
       if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）`)) return;
       // 備份：大量複製（整天）前存一份完整快照
-      const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
+      const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
       for(const k of realSrc){
         const [r,,t]=k.split("_");
@@ -1000,6 +1127,7 @@ function Counter() {
         prepMode:false,
         addP,removeP,editP,moveP:moveRun,labelOf,
         clip, startCopyCell, startCopyDay, startCopyPerson, pasteToCell, pasteToDay, cancelCopy,
+        waitR, promoteWaitR, removeWaitR,
       }),
       h("p",{style:{fontSize:15,color:"#9ca3af",marginTop:12}},"司機看名單用 driver.html。升期改到「新生預備」頁操作，需升期密碼。"),
     ),
@@ -1127,7 +1255,7 @@ function RouteFilter({ selRoute, setSelRoute }){
   );
 }
 
-function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,prepRawFn,addP,removeP,editP,moveP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy }){
+function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA,labelB,prepMode,prepLeftFn,prepRawFn,addP,removeP,editP,moveP,labelOf,clip,startCopyCell,startCopyDay,startCopyPerson,pasteToCell,pasteToDay,cancelCopy,waitR,promoteWaitR,removeWaitR }){
   const copying = !!clip;
   const srcLabel = clip ? (clip.mode==="day" ? `週${DAY_NAME[clip.day]} 整天` : clip.mode==="person" ? clip.person.name : "單一班次") : "";
   // 整天沒有任何班次的日子（例如平日的週三）→ 顯示「接駁車休息」
@@ -1196,6 +1324,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
                 h("span",{style:{color:SIDE_COLORS.A}},`${labelA} ${c.A.length}位`),
                 h("span",{style:{color:SIDE_COLORS.B}},`${labelB} ${c.B.length}位`),
                 prepMode?null:h("span",{style:{color:SIDE_COLORS.R}},`補考/機車 ${c.R.length}位`),
+                (!prepMode && waitR && (waitR[key]||[]).length>0) ? h("span",{style:{color:"#c2410c",fontWeight:700}},`⏳候補${(waitR[key]||[]).length}`) : null,
               ),
               copying
                 ? (isClipSrc
@@ -1205,7 +1334,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
                     h("button",{onClick:()=>toggleOpen(key),style:{flex:1,fontSize:14,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
                     (c.A.length+c.B.length+c.R.length)>0 ? h("button",{onClick:()=>startCopyCell(key),title:"複製這班",style:{fontSize:14,padding:"3px 8px",borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600}},"複製") : null,
                   ),
-              isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,moveP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson}):null,
+              isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,moveP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson,waitList:waitR?(waitR[key]||[]):[],promoteWaitR,removeWaitR}):null,
             );
           })
           ]; })()
@@ -1284,26 +1413,40 @@ function OperatorPicker({ staff, operator, setOperator }){
   );
 }
 
-function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, moveP, prepMode, pLeftA, pLeftB, onCopyPerson }) {
+function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, moveP, prepMode, pLeftA, pLeftB, onCopyPerson, waitList, promoteWaitR, removeWaitR }) {
   const [side,setSide]=useState("A"); const [name,setName]=useState(""); const [phone,setPhone]=useState(""); const [note,setNote]=useState("");
   const stops=ROUTE_STOPS[route.id]; const [stop,setStop]=useState(stops?stops[0]:"");
+  const [rideDate,setRideDate]=useState(""); // R 專用：搭車日期
   const [justAdded,setJustAdded]=useState(""); // 剛加入的人名，用於提醒登記其他天
   // 預備模式：該 side 的剩餘位；營運模式：整班剩餘位
   const sideLeft = prepMode ? (side==="A"?pLeftA:pLeftB) : lf;
-  // 營運模式允許超額 1 位（第 11 位按下會跳確認）；預備模式維持硬上限
-  const canAdd = prepMode ? sideLeft>0 : sideLeft>-1;
-  const isOverAdd = !prepMode && sideLeft<=0 && canAdd;
+  // 營運模式允許超額 1 位（第 11 位按下會跳確認）；R 滿了不擋，改進候補；預備模式維持硬上限
+  const canAdd = prepMode ? sideLeft>0 : (side==="R" ? true : sideLeft>-1);
+  const isOverAdd = !prepMode && sideLeft<=0 && sideLeft>-1 && canAdd; // 剛好到10~11之間的超額提示（A/B/R皆適用）
+  const willWait = !prepMode && side==="R" && sideLeft<=-1; // R 已達超額上限(11)，這次會進候補
   function submit(){
     const nm=name.trim();
     if(!nm) return;
-    addP(cKey,side,nm,fmtPhone(phone),stops?stop:undefined,toHalfWidth(note).trim());
-    setName("");setPhone("");setNote("");
+    if(side==="R" && !rideDate){ alert("補考/機車請填寫搭車日期。"); return; }
+    addP(cKey,side,nm,fmtPhone(phone),stops?stop:undefined,toHalfWidth(note).trim(),side==="R"?rideDate:undefined);
+    setName("");setPhone("");setNote("");setRideDate("");
     // 提醒：該生若還有其他天要搭車，記得一併登記（用「複製」最快）
     setJustAdded(nm);
     setTimeout(()=>setJustAdded(""),8000);
   }
   return h("div",{style:{marginTop:6,background:"#fafafa",borderRadius:6,padding:6}},
     h(NameList,{c,route,removeP,editP,moveP,cKey,hideR:prepMode,onCopyPerson}),
+    (!prepMode && waitList && waitList.length>0) ? h("div",{style:{marginTop:6,padding:6,borderRadius:6,background:"#fff7ed",border:"1px dashed #fdba74"}},
+      h("div",{style:{fontSize:13,fontWeight:700,color:"#c2410c",marginBottom:4}},`⏳ 候補中（${waitList.length}）`),
+      waitList.map(p=>h("div",{key:p.id,style:{display:"flex",alignItems:"center",gap:6,fontSize:14,padding:"3px 0",flexWrap:"wrap"}},
+        h("span",{style:{fontWeight:700,color:"#c2410c"}},p.name),
+        p.phone?h("span",{style:{color:"#78716c",fontSize:13}},p.phone):null,
+        h("span",{style:{color:"#0891b2",fontSize:13}},"搭車 "+fmtMD(p.rideDate)),
+        p.note?h("span",{style:{color:"#0891b2",fontSize:13}},p.note):null,
+        h("button",{onClick:()=>promoteWaitR(cKey,p.id),style:{marginLeft:"auto",border:"none",background:"#16a34a",color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:12,fontWeight:700,cursor:"pointer"}},"轉正"),
+        h("button",{onClick:()=>removeWaitR(cKey,p.id),style:{border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontSize:13}},"✕"),
+      )),
+    ) : null,
     justAdded ? h("div",{style:{marginTop:6,padding:"6px 8px",borderRadius:6,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
       h("span",null,"✅ 已加入 "+justAdded),
       h("span",{style:{fontWeight:400}},"｜這位還有其他天要搭車嗎？記得一起登記（點他旁邊的「複製」最快）"),
@@ -1318,12 +1461,14 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, moveP, 
       h("span",{style:{color:pLeftA<=0?"#dc2626":"#059669",fontWeight:700}}, pLeftA<=0?`${labelOf("A")} 已額滿`:`${labelOf("A")} 尚可收 ${pLeftA} 人`),
       h("span",{style:{color:pLeftB<=0?"#dc2626":"#059669",fontWeight:700}}, pLeftB<=0?`${labelOf("B")} 已額滿`:`${labelOf("B")} 尚可收 ${pLeftB} 人`),
     ):null,
+    willWait ? h("div",{style:{fontSize:13,color:"#c2410c",marginTop:4,fontWeight:600}},"此班已滿，登記後將加入候補名單") : null,
     h("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
       h("input",{placeholder:"姓名",value:name,onChange:(e)=>setName(e.target.value),style:inS(60)}),
       h("input",{placeholder:"電話",value:phone,onChange:(e)=>setPhone(e.target.value),onBlur:(e)=>setPhone(fmtPhone(e.target.value)),style:inS(92)}),
       h("input",{placeholder:"備註(首堂日…)",value:note,onChange:(e)=>setNote(e.target.value),onBlur:(e)=>setNote(toHalfWidth(e.target.value)),style:inS(110)}),
       stops?h("select",{value:stop,onChange:(e)=>setStop(e.target.value),style:{padding:"5px",borderRadius:6,border:"1px solid #d1d5db",fontSize:15,background:"#fff"}},stops.map(s=>h("option",{key:s,value:s},s))):null,
-      h("button",{onClick:submit,disabled:!canAdd,style:{padding:"5px 10px",borderRadius:6,border:"none",background:!canAdd?"#d1d5db":(isOverAdd?"#dc2626":"#1f2937"),color:"#fff",fontSize:15,fontWeight:600,cursor:!canAdd?"not-allowed":"pointer"}},!canAdd?"滿":(isOverAdd?"超額加":"加")),
+      (!prepMode && side==="R") ? h("input",{type:"date",value:rideDate,onChange:(e)=>setRideDate(e.target.value),title:"搭車日期（必填）",style:{padding:"5px",borderRadius:6,border:rideDate?"1px solid #d1d5db":"1px solid #dc2626",fontSize:14,background:"#fff"}}) : null,
+      h("button",{onClick:submit,disabled:!canAdd,style:{padding:"5px 10px",borderRadius:6,border:"none",background:!canAdd?"#d1d5db":(willWait?"#c2410c":isOverAdd?"#dc2626":"#1f2937"),color:"#fff",fontSize:15,fontWeight:600,cursor:!canAdd?"not-allowed":"pointer"}},!canAdd?"滿":(willWait?"加入候補":isOverAdd?"超額加":"加")),
     ),
   );
 }
@@ -1359,7 +1504,7 @@ function LogPage() {
     await setDoc(DOC, {
       data: base.data||{}, prep: base.prep||{}, motoW: base.motoW||{},
       numA: num(base.numA,459), numB: num(base.numB,458),
-      prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"", numDateA: base.numDateA||"", numDateB: base.numDateB||"",
+      prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"", numDateA: base.numDateA||"", numDateB: base.numDateB||"", waitR: base.waitR||{},
       archive: base.archive||[], staff: list, summer: !!base.summer,
       updatedAt: Date.now(),
     }, { merge: true });
@@ -1400,6 +1545,8 @@ function LogPage() {
         prepDateB: (s.prepDateB!==undefined ? s.prepDateB : base.prepDateB) || "",
         numDateA: (s.numDateA!==undefined ? s.numDateA : base.numDateA) || "",
         numDateB: (s.numDateB!==undefined ? s.numDateB : base.numDateB) || "",
+        // R候補：舊備份沒有這欄位時沿用目前值
+        waitR: (s.waitR!==undefined ? s.waitR : base.waitR) || {},
         // 期數／暑期：沿用目前值（備份不含這些，維持現況）
         numA: num(base.numA,459), numB: num(base.numB,458),
         prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459),
@@ -1416,7 +1563,7 @@ function LogPage() {
   if(!ok) return h(Gate,{title:"管理登入",hint:"請輸入管理密碼",pass:ADMIN_PASSWORD,onPass:()=>setOk(true)});
   if(items===null) return h("div",{style:{padding:20}},h("div",{className:"spin"}));
 
-  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","設定預備梯次":"#0891b2","換梯次":"#7c3aed","預備換梯次":"#7c3aed","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","超額新增":"#dc2626","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備超額新增":"#dc2626","預備刪除":"#dc2626","還原備份":"#b91c1c" };
+  const ACT_COLOR={ "新增":"#059669","刪除":"#dc2626","修改":"#2563eb","預備修改":"#2563eb","機車正期修改":"#2563eb","機車新生修改":"#2563eb","改梯次名":"#7c3aed","改期數":"#7c3aed","設定預備梯次":"#0891b2","換梯次":"#7c3aed","預備換梯次":"#7c3aed","加入候補":"#c2410c","候補轉正":"#16a34a","候補轉正(超額)":"#16a34a","取消候補":"#dc2626","R自動下車":"#6b7280","候補自動移除":"#6b7280","清空梯次":"#dc2626","清空機車班":"#dc2626","機車新增":"#059669","超額新增":"#dc2626","機車刪除":"#dc2626","機車修改":"#2563eb","機車複製":"#d97706","升期":"#1d4ed8","預備新增":"#0891b2","預備超額新增":"#dc2626","預備刪除":"#dc2626","還原備份":"#b91c1c" };
   const fmt=(t)=>{ const d=new Date(t); const p=(n)=>String(n).padStart(2,"0"); return `${d.getMonth()+1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
   // 快照人數統計（給備份卡片顯示用）
   function snapCount(store, isMoto){
