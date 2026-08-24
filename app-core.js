@@ -208,7 +208,15 @@ export function NameList({ c, route, readOnly, removeP, editP, moveP, cKey, hide
   const rows = [];
   c.A.forEach(p=>rows.push({p,side:"A"}));
   c.B.forEach(p=>rows.push({p,side:"B"}));
-  if(!hideR) c.R.forEach(p=>rows.push({p,side:"R"}));
+  if(!hideR){
+    const rSorted = [...c.R].sort((a,b)=>{
+      if(!a.rideDate && !b.rideDate) return 0;
+      if(!a.rideDate) return 1;  // 沒填日期的排最後
+      if(!b.rideDate) return -1;
+      return a.rideDate < b.rideDate ? -1 : a.rideDate > b.rideDate ? 1 : 0;
+    });
+    rSorted.forEach(p=>rows.push({p,side:"R"}));
+  }
   return h("div", { style:{ marginTop:4 } },
     rows.map(({p,side})=>h(NameRow,{key:p.id,p,side,stops,readOnly,removeP,editP,moveP,prepMode:hideR,cKey,onCopyPerson,rowIndex:i++})),
   );
