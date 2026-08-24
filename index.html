@@ -21,7 +21,7 @@
 <script type="module">
 import {
   h, useState, useEffect, useMemo, useRef, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
-  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
+  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword,
   tk, EMPTY, fmtPhone, toHalfWidth, mondayOf, weekLabel, upcomingMondays, mondayWeeksAgo, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
 } from "./app-core.js";
 
@@ -555,6 +555,10 @@ function Counter() {
     if(!requireOp())return;
     if(!name.trim())return;
     if(side==="R"){ alert("預備表不收補考/機車，補考/機車請在正期班表登記。"); return; }
+    if(hasMotoKeyword(name)||hasMotoKeyword(note)){
+      alert(`姓名或備註偵測到「機車／補考」相關字樣，新生預備表不收補考/機車。\n請改到「汽車正期班表」用「補考/機車」梯次登記這位「${name.trim()}」。`);
+      return;
+    }
     if(!prepHasDate(side)){
       alert(`新生 ${side} 尚未設定開訓日，無法登記。\n請先在上方「預備梯次」按「改」設定開訓日（依開訓日才能正確計算每車人數）。`);
       return;
@@ -583,6 +587,9 @@ function Counter() {
   }
   function editPrep(k,side,id,fields){
     if(!requireOp())return;
+    if(hasMotoKeyword(fields.name)||hasMotoKeyword(fields.note)){
+      if(!confirm(`姓名或備註偵測到「機車／補考」相關字樣，新生預備表不收補考/機車。\n這位應該改到「汽車正期班表」用「補考/機車」梯次登記，是否仍要繼續存這個修改？`)) return;
+    }
     const c=prep[k]||EMPTY();
     const old=c[side].find(x=>x.id===id);
     const updated=c[side].map(x=>{
@@ -842,6 +849,7 @@ function Counter() {
         if(already){ duplicate++; continue; }
         if(prepMode){
           if(side==="R"){ skipped++; continue; } // 預備表不收 R
+          if(hasMotoKeyword(p.name)||hasMotoKeyword(p.note)){ skipped++; continue; } // 姓名/備註含機車補考字樣，不收
           const prev = side==="A" ? prevA : prevB;
           const room = SEAT_CAP - prev - oc.R.length - out[side].length; // 硬擋10，扣前一梯與R
           if(room<=0){ skipped++; continue; }
