@@ -494,7 +494,7 @@ function App() {
               : [].concat(
                   c.A.map(p=>({p,side:"A"})),
                   c.B.map(p=>({p,side:"B"})),
-                  prepMode?[]:c.R.map(p=>({p,side:"R"})),
+                  prepMode?[]:[...c.R].sort((a,b)=>(a.rideDate||"9999")<(b.rideDate||"9999")?-1:(a.rideDate||"9999")>(b.rideDate||"9999")?1:0).map(p=>({p,side:"R"})),
                 ).map(({p,side})=>h(PersonRow,{key:p.id,p,side,stops:ROUTE_STOPS[selRoute],labelOf,
                     onEdit:(f)=> prepMode?editPrepP(key,side,p.id,f):editRun(key,side,p.id,f),
                     onDel:()=> prepMode?delPrepP(key,side,p.id):delRun(key,side,p.id),
