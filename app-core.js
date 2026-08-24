@@ -80,6 +80,11 @@ export function listBackups(cb) {
 
 
 export const SEAT_CAP = 10;
+// 偵測姓名/備註是否含機車、補考相關字樣（新生預備表不該收這類人，提醒改去正期登記）
+export function hasMotoKeyword(text){
+  if(!text) return false;
+  return /機車|補考|機|補/.test(text);
+}
 export const ROUTES = [
   { id: "gongguan", name: "公館線", color: "#2563eb" },
   { id: "zhongxiao", name: "忠孝復興線", color: "#059669" },
