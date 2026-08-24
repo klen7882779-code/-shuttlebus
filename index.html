@@ -844,15 +844,33 @@ function Counter() {
     if(!requireOp()){ return; }
     const srcData = clip.table==="prep" ? prep : data;
     const destRouteId = destKey.split("_")[0];
-    let srcCell, srcDesc;
-    if(clip.mode==="cell"){ srcCell = srcData[clip.key]||EMPTY(); srcDesc=slotDesc(clip.key); }
-    else if(clip.mode==="person"){ srcCell = { A:[], B:[], R:[], [clip.side]:[clip.person] }; srcDesc=`${clip.person.name}`; }
+    let srcCell, srcDesc, srcKey;
+    if(clip.mode==="cell"){ srcCell = srcData[clip.key]||EMPTY(); srcDesc=slotDesc(clip.key); srcKey=clip.key; }
+    else if(clip.mode==="person"){ srcCell = { A:[], B:[], R:[], [clip.side]:[clip.person] }; srcDesc=`${clip.person.name}`; srcKey=clip.key; }
     else { alert("整天複製請點目標『那一天的標題』貼上，不是貼到單一格。"); return; }
     const srcTotal = srcCell.A.length+srcCell.B.length+srcCell.R.length;
     if(srcTotal===0){ alert("來源沒有乘客。"); cancelCopy(); return; }
+    // R 跨「星期」複製時，搭車日期不能照抄來源（來源是別天的日期），強制逐一重新輸入
+    const srcDay = srcKey ? srcKey.split("_")[1] : null;
+    const destDay = destKey.split("_")[1];
+    const crossDay = page!=="prep" && srcDay && srcDay!==destDay;
+    let adjustedSrcCell = srcCell;
+    if(crossDay && srcCell.R.length>0){
+      const newR = [];
+      for(const p of srcCell.R){
+        const d = prompt(`「${p.name}」原本搭車日期是 ${p.rideDate||"未設定"}（週${DAY_NAME[srcDay]}），\n現在要複製到「週${DAY_NAME[destDay]}」，請填寫正確的搭車日期（格式 2026-08-17）：`, "");
+        if(d===null){ alert(`已取消「${p.name}」的複製（未確認新搭車日期）。`); continue; }
+        const v=(d||"").trim();
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ alert(`「${p.name}」日期格式不正確，未複製此人。`); continue; }
+        newR.push({...p, rideDate:v});
+      }
+      adjustedSrcCell = {...srcCell, R:newR};
+      const skippedCount = srcCell.R.length - newR.length;
+      if(newR.length===0 && srcCell.A.length===0 && srcCell.B.length===0){ alert("沒有任何人被複製。"); cancelCopy(); return; }
+    }
     if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？\n（疊加，超過 ${SEAT_CAP} 位的會略過；已存在同姓名同電話的人不會重複新增）`)) return;
     const next = page==="prep" ? {...prep} : {...data};
-    const { added, skipped, duplicate } = mergeInto(next, destKey, srcCell, destRouteId, page==="prep");
+    const { added, skipped, duplicate } = mergeInto(next, destKey, adjustedSrcCell, destRouteId, page==="prep");
     if(page==="prep"){ setPrep(next); persist({prep:next}); } else { setData(next); persist({data:next}); }
     writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}` });
     cancelCopy();
@@ -873,7 +891,10 @@ function Counter() {
       // 也包含來源那天「buildGrid 有班但還沒人」的就跳過（沒人不用搬）
       const realSrc = srcKeys.filter(k=>{ const c=srcData[k]; return c && (c.A.length+c.B.length+c.R.length)>0; });
       if(realSrc.length===0){ alert("來源那天沒有任何乘客。"); cancelCopy(); return; }
-      if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）`)) return;
+      // 檢查是否含補考/機車(R)：整天複製的搭車日期會照抄來源(舊日期)，需事後手動修正
+      const rCount = realSrc.reduce((n,k)=>n+(srcData[k].R?srcData[k].R.length:0), 0);
+      const rWarn = rCount>0 ? `\n\n⚠ 來源含 ${rCount} 位補考/機車，複製後搭車日期會跟來源相同（是錯的），請複製完成後逐一到「週${DAY_NAME[destDay]}」用「改」修正正確的搭車日期，否則到期會被誤判自動下車！` : "";
+      if(!confirm(`把「週${DAY_NAME[clip.day]}」整天名單，複製到「週${DAY_NAME[destDay]}」？\n（各班對應貼上、疊加，超過 ${SEAT_CAP} 位略過；已存在同姓名同電話的人不會重複新增）${rWarn}`)) return;
       // 備份：大量複製（整天）前存一份完整快照
       const bk = await writeBackup({ data, prep, motoW, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff }, `整天複製（${curTable==="prep"?"預備表":"營運表"}週${DAY_NAME[clip.day]}→週${DAY_NAME[destDay]}）`, who());
       if(!bk && !confirm("備份沒有存成功（可能是網路問題）。整天複製只是把人疊加過去、不會刪除原本資料，仍要繼續嗎？")) return;
@@ -883,17 +904,30 @@ function Counter() {
         const res = mergeInto(next, destKey, srcData[k], r, page==="prep");
         added+=res.added; skipped+=res.skipped; duplicate+=res.duplicate; classes++;
       }
-      writeLog({ who:who(), act:"複製整天", slot:`週${DAY_NAME[clip.day]} → 週${DAY_NAME[destDay]}`, name:`${classes}班 ${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}` });
+      writeLog({ who:who(), act:"複製整天", slot:`週${DAY_NAME[clip.day]} → 週${DAY_NAME[destDay]}`, name:`${classes}班 ${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}${rCount?`（含${rCount}位補考機車需手動改搭車日期）`:""}` });
+      if(rCount>0) alert(`複製完成，但別忘了：有 ${rCount} 位補考/機車的搭車日期還是舊的，請到「週${DAY_NAME[destDay]}」逐一用「改」修正，否則日期到會被系統誤判自動下車。`);
     } else {
-      // 單班/單人來源，貼到某天 → 該天「同路線同時段」那班
+      // 單班/單人來源，貼到某天 → 該天「同路線同時段」那班（一定跨星期，R需重新輸入搭車日期）
       const [r,,t]=clip.key.split("_");
       const destKey = tk(r,destDay,t);
-      const srcCell = clip.mode==="person"
+      let srcCell = clip.mode==="person"
         ? { A:[], B:[], R:[], [clip.side]:[clip.person] }
         : (srcData[clip.key]||EMPTY());
       const srcDesc = clip.mode==="person" ? clip.person.name : slotDesc(clip.key);
       const srcTotal=srcCell.A.length+srcCell.B.length+srcCell.R.length;
       if(srcTotal===0){ alert("來源沒有乘客。"); cancelCopy(); return; }
+      if(page!=="prep" && srcCell.R.length>0){
+        const newR=[];
+        for(const p of srcCell.R){
+          const d=prompt(`「${p.name}」原本搭車日期是 ${p.rideDate||"未設定"}，\n現在要複製到「週${DAY_NAME[destDay]}」，請填寫正確的搭車日期（格式 2026-08-17）：`, "");
+          if(d===null){ alert(`已取消「${p.name}」的複製（未確認新搭車日期）。`); continue; }
+          const v=(d||"").trim();
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ alert(`「${p.name}」日期格式不正確，未複製此人。`); continue; }
+          newR.push({...p, rideDate:v});
+        }
+        srcCell = {...srcCell, R:newR};
+        if(newR.length===0 && srcCell.A.length===0 && srcCell.B.length===0){ alert("沒有任何人被複製。"); cancelCopy(); return; }
+      }
       if(!confirm(`把「${srcDesc}」複製到「${slotDesc(destKey)}」？`)) return;
       const res=mergeInto(next, destKey, srcCell, r, page==="prep"); added=res.added; skipped=res.skipped; duplicate=res.duplicate;
       writeLog({ who:who(), act:"複製", slot:`${srcDesc} → ${slotDesc(destKey)}`, name:`${added}位${skipped?`（滿座略過${skipped}）`:""}${duplicate?`（重複略過${duplicate}）`:""}` });
@@ -1334,7 +1368,7 @@ function WeekTable({ grid,days,isOpenFn,toggleOpen,selRoute,cellOf,leftOf,labelA
                     h("button",{onClick:()=>toggleOpen(key),style:{flex:1,fontSize:14,padding:"3px 0",borderRadius:6,border:"none",background:isOpen?"#e5e7eb":"#f3f4f6",color:"#374151",cursor:"pointer",fontWeight:600}},isOpen?"收合":"登記/名單"),
                     (c.A.length+c.B.length+c.R.length)>0 ? h("button",{onClick:()=>startCopyCell(key),title:"複製這班",style:{fontSize:14,padding:"3px 8px",borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",color:"#6b7280",cursor:"pointer",fontWeight:600}},"複製") : null,
                   ),
-              isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,moveP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson,waitList:waitR?(waitR[key]||[]):[],promoteWaitR,removeWaitR}):null,
+              isOpen && !copying ? h(CellEditor,{cKey:key,c,route,lf:prepMode?Math.min(pLeftA,pLeftB):lfShow,labelOf,addP,removeP,editP,moveP,prepMode,pLeftA,pLeftB,onCopyPerson:startCopyPerson,waitList:waitR?[...(waitR[key]||[])].sort((a,b)=>(a.rideDate||"9999")<(b.rideDate||"9999")?-1:(a.rideDate||"9999")>(b.rideDate||"9999")?1:0):[],promoteWaitR,removeWaitR}):null,
             );
           })
           ]; })()
