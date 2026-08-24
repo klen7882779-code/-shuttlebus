@@ -180,11 +180,11 @@ function Counter() {
     return true;
   }
 
-  async function persist(patch) {
+  async function persist(patch, base) {
     setSaving(true);
     const payload = {
       data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff, summer,
-      ...patch, updatedAt: Date.now(),
+      ...(base||{}), ...patch, updatedAt: Date.now(),
     };
     try { await setDoc(DOC, payload, { merge: true }); }
     catch(e){ console.error(e); alert("儲存失敗，請檢查網路"); }
@@ -701,16 +701,20 @@ function Counter() {
       setPrepNumB(nextPrepNum); setPrepDateB("");
     }
     setData(nextData); setPrep(nextPrep); setArchive(nextArchive);
+    // 記下這次升期後「最新的完整狀態」，供緊接著的 promptNextClass 存檔時使用，
+    // 避免 promptNextClass 用到尚未更新的舊閉包變數（numA/data等）把剛升好的資料蓋回去
+    const freshBase = { data, prep, motoW, numA, numB, prepNumA, prepNumB, prepDateA, prepDateB, numDateA, numDateB, waitR, archive, staff, summer, ...patch };
     persist(patch);
     writeLog({ who:who(), act:"升期", slot:`${side}欄`, name:`${oldName} 退場 → ${newName} 上車（${moved}位）` });
     alert(`升期完成：${newName} 已上車（${moved} 位），${oldName} 已封存。\n\n接下來請設定下一期「${nextPrepNum}${side}」的期別與開訓日。`);
 
     // 強制設定下一期：期別自動帶入、可改，開訓日必填
-    promptNextClass(side, nextPrepNum);
+    promptNextClass(side, nextPrepNum, freshBase);
   }
 
   // 升期後強制設定下一期（期別預設自動算好、可改，開訓日必填）
-  function promptNextClass(side, defaultNum){
+  // base：升期剛完成時的最新完整狀態，避免這裡的 persist 用到尚未更新的舊資料覆蓋掉升期結果
+  function promptNextClass(side, defaultNum, base){
     const numStr = prompt(`下一期預備 ${side} 期數（系統自動帶 ${defaultNum}，如有誤可改）：`, String(defaultNum));
     if(numStr===null){ alert("尚未設定下一期開訓日，請記得稍後到預備梯次按「改」補上。"); return; }
     const n = parseInt(numStr,10);
@@ -718,13 +722,13 @@ function Counter() {
     let d = prompt(`「${n}${side}」開訓日期（格式 2026-07-18，必填）：`, "");
     if(d===null || !/^\d{4}-\d{2}-\d{2}$/.test((d||"").trim()) || isNaN(new Date((d||"").trim()).getTime())){
       alert("開訓日未正確設定，請稍後到預備梯次按「改」補上。");
-      // 期數若有改仍存起來
-      if(n!==defaultNum){ if(side==="A"){ setPrepNumA(n); persist({prepNumA:n}); } else { setPrepNumB(n); persist({prepNumB:n}); } }
+      // 期數若有改仍存起來（用 base 當底，避免覆蓋掉剛升期的結果）
+      if(n!==defaultNum){ if(side==="A"){ setPrepNumA(n); persist({prepNumA:n}, base); } else { setPrepNumB(n); persist({prepNumB:n}, base); } }
       return;
     }
     d=d.trim();
-    if(side==="A"){ setPrepNumA(n); setPrepDateA(d); persist({prepNumA:n, prepDateA:d}); }
-    else { setPrepNumB(n); setPrepDateB(d); persist({prepNumB:n, prepDateB:d}); }
+    if(side==="A"){ setPrepNumA(n); setPrepDateA(d); persist({prepNumA:n, prepDateA:d}, base); }
+    else { setPrepNumB(n); setPrepDateB(d); persist({prepNumB:n, prepDateB:d}, base); }
     writeLog({ who:who(), act:"設定預備梯次", slot:`預備${side}`, name:`${n}${side}・開訓 ${d}` });
   }
 
@@ -776,12 +780,26 @@ function Counter() {
     const curNum = side==="A"?numA:numB;
     const curDate = side==="A"?numDateA:numDateB;
     const numStr = prompt(`正期 ${side} 期數（目前 ${curNum}），不改請直接按確定：`, String(curNum));
-    if(numStr!==null) setNum(side, numStr);
+    // 若同時改了期數，記下「期數已更新後的最新狀態」，供緊接著的開訓日存檔使用，避免互相覆蓋（同 promote 的修法）
+    let numBase = null;
+    if(numStr!==null){
+      const n=parseInt(numStr,10);
+      if(!isNaN(n) && n!==curNum){
+        if(!confirm(`確定把「正期${side}」期數從 ${curNum} 改成 ${n} 嗎？\n（這會改變整欄梯次名稱）`)){
+          // 使用者取消改期數，不動
+        } else {
+          if(side==="A"){ setNumA(n); } else { setNumB(n); }
+          numBase = side==="A" ? {numA:n} : {numB:n};
+          persist(numBase);
+          writeLog({ who:who(), act:"改期數", slot:side==="A"?"正式A":"正式B", name:`${curNum} → ${n}` });
+        }
+      }
+    }
     const d = prompt(`正期 ${side} 開訓日（格式 2026-07-18，供計算每車人數；目前 ${curDate||"未設"}）：`, curDate||"");
     if(d===null) return;
     const v = d.trim();
     if(v!=="" && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ alert("開訓日格式需 2026-07-18（西元），開訓日未變更。"); return; }
-    if(side==="A"){ setNumDateA(v); persist({numDateA:v}); } else { setNumDateB(v); persist({numDateB:v}); }
+    if(side==="A"){ setNumDateA(v); persist({numDateA:v}, numBase); } else { setNumDateB(v); persist({numDateB:v}, numBase); }
     if(v) writeLog({ who:who(), act:"設定營運開訓日", slot:`營運${side}`, name:v });
   }
 
@@ -1083,7 +1101,7 @@ function Counter() {
           due.map(x=>h("div",{key:x.side,style:{fontSize:15,color:"#7f1d1d"}},
             `${x.name} 開訓日 ${fmtMD(x.date)} 已到 → 建議升期：${x.old} 退場、${x.name} 上車`)),
         ),
-        due.map(x=>h("button",{key:x.side,onClick:()=>{ setPage("prep"); promote(x.side); },
+        due.map(x=>h("button",{key:x.side,onClick:()=>{ promote(x.side); },
           style:{padding:"10px 16px",borderRadius:10,border:"none",background:"#dc2626",color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer"}},
           `前往升 ${x.name}`)),
       );
