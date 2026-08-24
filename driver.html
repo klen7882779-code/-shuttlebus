@@ -165,7 +165,7 @@ function Driver() {
                 ? h("div",null,
                     c.A.map(p=>personRow(p,"A",route,labelOf("A"))),
                     c.B.map(p=>personRow(p,"B",route,labelOf("B"))),
-                    c.R.map(p=>personRow(p,"R",route,"補考/機車")),
+                    [...c.R].sort((a,b)=>(a.rideDate||"9999")<(b.rideDate||"9999")?-1:(a.rideDate||"9999")>(b.rideDate||"9999")?1:0).map(p=>personRow(p,"R",route,"補考/機車")),
                   )
                 : h("div",{style:{fontSize:13,color:"#cbd5e1",padding:"4px 0"}},"（無人）"),
             );
