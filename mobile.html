@@ -21,7 +21,7 @@
 <script type="module">
 import {
   h, useState, useEffect, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog,
-  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
+  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword,
   tk, EMPTY, fmtPhone, toHalfWidth, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
   mondayOf, weekLabel, upcomingMondays
 } from "./app-core.js";
@@ -305,6 +305,10 @@ function App() {
   function addPrepP(k,side,f){
     if(!requireOp()) return false;
     if(side==="R"){ alert("預備表不收補考/機車，補考/機車請在正期班表登記。"); return false; }
+    if(hasMotoKeyword(f.name)||hasMotoKeyword(f.note)){
+      alert(`姓名或備註偵測到「機車／補考」相關字樣，新生預備表不收補考/機車。\n請改到「正期班表」用「補考/機車」梯次登記這位「${f.name}」。`);
+      return false;
+    }
     if(!prepHasDate(side)){ alert(`新生 ${side} 尚未設定開訓日，無法登記。\n請先用電腦版設定開訓日（依開訓日才能正確計算每車人數）。`); return false; }
     if(prepLeft(k,side)<=0){
       const prev=prepPrevCount(k,side); const oc=cell(k);
@@ -321,6 +325,9 @@ function App() {
   }
   function editPrepP(k,side,id,f){
     if(!requireOp()) return;
+    if(hasMotoKeyword(f.name)||hasMotoKeyword(f.note)){
+      if(!confirm(`姓名或備註偵測到「機車／補考」相關字樣，新生預備表不收補考/機車。\n這位應該改到「正期班表」用「補考/機車」梯次登記，是否仍要繼續存這個修改？`)) return;
+    }
     const c = pcell(k);
     const old = c[side].find(x=>x.id===id);
     const updated = c[side].map(x=>{
