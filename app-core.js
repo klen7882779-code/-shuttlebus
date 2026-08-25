@@ -294,3 +294,70 @@ export const thTime = { padding:"10px 8px",background:"#f9fafb",borderBottom:"2p
 export const thDay = { padding:"10px 8px",background:"#f9fafb",borderBottom:"2px solid #e5e7eb",fontSize:14,fontWeight:700 };
 export const tdTime = { padding:"8px",borderBottom:"2px solid #cbd5e1",background:"#fafafa",textAlign:"center",verticalAlign:"top",position:"sticky",left:0 };
 export const tdCell = { padding:"6px",borderBottom:"2px solid #cbd5e1",borderLeft:"1px solid #f0f0f0",verticalAlign:"top",minWidth:130 };
+
+// ── 閒置自動重整：長時間無操作時自動重新整理頁面，避免舊分頁的過期資料蓋掉別人存的新資料 ──
+// idleMinutes：多久沒動作視為閒置（預設30分鐘）
+// isTypingFn：可選，回傳true時代表使用者正在填表單還沒送出，暫緩觸發倒數（避免清掉沒送出的字）
+export function IdleReloader({ idleMinutes = 30, isTypingFn }) {
+  const [showWarn, setShowWarn] = useState(false);
+  const [countdown, setCountdown] = useState(10);
+  const lastActive = useRef(Date.now());
+  const warnTimerRef = useRef(null);
+  const countdownRef = useRef(null);
+
+  useEffect(() => {
+    const IDLE_MS = idleMinutes * 60 * 1000;
+    const WARN_SEC = 10;
+
+    const resetIdle = () => {
+      lastActive.current = Date.now();
+      if (showWarn) {
+        // 使用者回來動作了，取消這次的重整流程，重新計時
+        setShowWarn(false);
+        if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+        setCountdown(WARN_SEC);
+      }
+    };
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach(ev => window.addEventListener(ev, resetIdle, { passive: true }));
+
+    const checkIdle = setInterval(() => {
+      const idleFor = Date.now() - lastActive.current;
+      if (idleFor >= IDLE_MS && !showWarn) {
+        // 若使用者正在填表單還沒送出，暫緩這次觸發，等表單清空後才會重新累積閒置時間
+        if (isTypingFn && isTypingFn()) { lastActive.current = Date.now() - IDLE_MS + 60000; return; } // 1分鐘後再檢查一次
+        setShowWarn(true);
+        setCountdown(WARN_SEC);
+        countdownRef.current = setInterval(() => {
+          setCountdown(c => {
+            if (c <= 1) {
+              clearInterval(countdownRef.current);
+              window.location.reload();
+              return 0;
+            }
+            return c - 1;
+          });
+        }, 1000);
+      }
+    }, 30000); // 每30秒檢查一次是否已閒置
+
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, resetIdle));
+      clearInterval(checkIdle);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [idleMinutes, showWarn]);
+
+  if (!showWarn) return null;
+  return h("div", { style:{ position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", zIndex:9999,
+      background:"#1f2937", color:"#fff", borderRadius:12, padding:"14px 20px", boxShadow:"0 8px 24px rgba(0,0,0,0.3)",
+      display:"flex", alignItems:"center", gap:14, fontSize:15, flexWrap:"wrap", maxWidth:"92vw" } },
+    h("span", null, `⏰ 閒置過久，${countdown} 秒後自動重新整理（避免資料過舊）`),
+    h("button", { onClick:()=>{
+        setShowWarn(false);
+        if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+        lastActive.current = Date.now();
+      }, style:{ border:"none", background:"#fff", color:"#1f2937", borderRadius:8, padding:"6px 14px", fontWeight:700, cursor:"pointer" } },
+      "我還在，取消"),
+  );
+}
