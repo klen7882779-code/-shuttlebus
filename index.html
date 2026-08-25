@@ -21,7 +21,7 @@
 <script type="module">
 import {
   h, useState, useEffect, useMemo, useRef, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, writeLog, writeBackup, listBackups,
-  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword,
+  SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword, IdleReloader,
   tk, EMPTY, fmtPhone, toHalfWidth, mondayOf, weekLabel, upcomingMondays, mondayWeeksAgo, buildGrid, buildMotoGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey, NameList, dot, tabGroup, tabBtn, thTime, thDay, tdTime, tdCell
 } from "./app-core.js";
 
@@ -31,6 +31,10 @@ const ADMIN_PASSWORD   = "admin22102270"; // 異動紀錄頁（只有你）
 const CLEAR_PASSWORD   = "22101079";       // 清空梯次
 
 const ROUTE_NAME = Object.fromEntries(ROUTES.map(r=>[r.id,r.name]));
+// 追蹤是否有任何加人表單正在輸入（姓名/電話有內容但還沒送出），供閒置自動重整判斷是否要暫緩
+const typingTracker = { count: 0 };
+function isAnyoneTyping(){ return typingTracker.count > 0; }
+
 function slotDesc(key){ // 把 trip key 還原成可讀描述
   const [rid,day,time]=key.split("_");
   return `${ROUTE_NAME[rid]} 週${DAY_NAME[day]} ${time}`;
@@ -1080,6 +1084,7 @@ function Counter() {
   if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
 
   return h("div", { style:{ fontFamily:"system-ui,sans-serif",maxWidth:1750,margin:"0 auto",padding:16,color:"#1f2937" } },
+    h(IdleReloader,{idleMinutes:30,isTypingFn:isAnyoneTyping}),
     h("div", { style:{ display:"flex",alignItems:"center",gap:12,marginBottom:14,flexWrap:"wrap" } },
       h("h1", { style:{ fontSize:26,fontWeight:800,margin:0 } }, "接駁車週表 ", h("span",{style:{fontSize:16,color:"#6b7280",fontWeight:500}},"櫃台")),
       h("div", { style:tabGroup },
@@ -1484,6 +1489,14 @@ function CellEditor({ cKey, c, route, lf, labelOf, addP, removeP, editP, moveP, 
   const canAdd = prepMode ? sideLeft>0 : (side==="R" ? true : sideLeft>-1);
   const isOverAdd = !prepMode && sideLeft<=0 && sideLeft>-1 && canAdd; // 剛好到10~11之間的超額提示（A/B/R皆適用）
   const willWait = !prepMode && side==="R" && sideLeft<=-1; // R 已達超額上限(11)，這次會進候補
+  // 有未送出的姓名/電話內容時，登記到全域追蹤器，讓閒置自動重整暫緩觸發；卸載或清空時取消登記
+  const hasDraft = !!(name.trim() || phone.trim());
+  const draftRef = useRef(false);
+  useEffect(()=>{
+    if(hasDraft && !draftRef.current){ typingTracker.count++; draftRef.current=true; }
+    else if(!hasDraft && draftRef.current){ typingTracker.count--; draftRef.current=false; }
+    return ()=>{ if(draftRef.current){ typingTracker.count--; draftRef.current=false; } };
+  },[hasDraft]);
   function submit(){
     const nm=name.trim();
     if(!nm) return;
