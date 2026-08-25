@@ -20,7 +20,7 @@
 
 <script type="module">
 import {
-  h, useState, useEffect, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog,
+  h, useState, useEffect, useRef, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog, IdleReloader,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword,
   tk, EMPTY, fmtPhone, toHalfWidth, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
   mondayOf, weekLabel, upcomingMondays
@@ -120,6 +120,10 @@ function PersonRow({ p, side, stops, labelOf, onEdit, onDel, onCopy }) {
 }
 
 // ── 加人表單 ──────────────────────────────
+// 追蹤是否有加人表單正在輸入（姓名/電話有內容但還沒送出），供閒置自動重整判斷是否要暫緩
+const typingTracker = { count: 0 };
+function isAnyoneTyping(){ return typingTracker.count > 0; }
+
 function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOverFn }) {
   const [open,setOpen] = useState(false);
   const [side,setSide] = useState(motoMode?"R":"A");
@@ -128,6 +132,14 @@ function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOver
   const stops = ROUTE_STOPS[route.id];
   const [stop,setStop] = useState(stops?stops[0]:"");
   const [tip,setTip] = useState("");
+  // 有未送出的姓名/電話內容時，登記到全域追蹤器，讓閒置自動重整暫緩觸發
+  const hasDraft = !!(name.trim() || phone.trim());
+  const draftRef = useRef(false);
+  useEffect(()=>{
+    if(hasDraft && !draftRef.current){ typingTracker.count++; draftRef.current=true; }
+    else if(!hasDraft && draftRef.current){ typingTracker.count--; draftRef.current=false; }
+    return ()=>{ if(draftRef.current){ typingTracker.count--; draftRef.current=false; } };
+  },[hasDraft]);
 
   if(!open) return h("div",{style:{padding:"10px 14px",borderTop:"1px solid #f1f5f9"}},
     tip?h("div",{style:{marginBottom:8,padding:"10px 12px",borderRadius:10,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:14,fontWeight:600,lineHeight:1.5}},
@@ -515,6 +527,7 @@ function App() {
   }
 
   return h("div",{style:{padding:"10px 10px 40px",maxWidth:640,margin:"0 auto"}},
+    h(IdleReloader,{idleMinutes:30,isTypingFn:isAnyoneTyping}),
     clip?h("div",{style:{position:"sticky",top:0,zIndex:20,background:"#fffbeb",border:"2px solid #f59e0b",borderRadius:12,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",boxShadow:"0 2px 8px rgba(0,0,0,.08)"}},
       h("span",{style:{fontSize:15,fontWeight:700,color:"#92400e"}},"📋 正在複製："+clip.person.name),
       h("span",{style:{fontSize:13,color:"#b45309",width:"100%"}},
