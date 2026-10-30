@@ -1,7 +1,7 @@
 // ── 接駁車系統核心（櫃台頁與司機頁共用）────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion,
-  collection, addDoc, query, where, orderBy, getDocs, deleteDoc }
+  collection, addDoc, query, where, orderBy, getDocs, deleteDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import React, { useState, useEffect, useMemo, useRef } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
@@ -21,6 +21,22 @@ const LOG = doc(db, "shuttle", "log");
 const BACKUP_COL = collection(db, "shuttle", "backup", "items"); // 每個關鍵操作前的完整快照，各自一個文件（避免單一文件超過 1MB 上限）
 export const h = React.createElement;
 export { useState, useEffect, useMemo, useRef, createRoot, DOC, LOG, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, BACKUP_COL };
+
+// merge:true 不會刪除 map 內已不存在的 key；此函式把「舊有、新版已無」的週/格 key 換成 deleteField()，
+// 讓清空整週、舊週自動移除真的在伺服器上生效。其餘 key 原樣保留。
+export function motoPatchWithDeletes(oldMotoW, newMotoW){
+  const out = {};
+  const oldM = oldMotoW || {}, newM = newMotoW || {};
+  for(const wk in oldM){
+    if(!(wk in newM)){ out[wk] = deleteField(); continue; }
+    const oldWeek = oldM[wk] || {}, newWeek = newM[wk] || {};
+    const w = { ...newWeek };
+    for(const k in oldWeek){ if(!(k in newWeek)) w[k] = deleteField(); }
+    out[wk] = w;
+  }
+  for(const wk in newM){ if(!(wk in oldM)) out[wk] = newM[wk]; }
+  return out;
+}
 
 // ── 異動紀錄：寫一筆 + 清掉 60 天前 ──────────────────
 const LOG_KEEP_MS = 60 * 24 * 60 * 60 * 1000; // 60 天
@@ -302,62 +318,64 @@ export function IdleReloader({ idleMinutes = 30, isTypingFn }) {
   const [showWarn, setShowWarn] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const lastActive = useRef(Date.now());
-  const warnTimerRef = useRef(null);
+  const warnRef = useRef(false);          // 是否正在倒數（用 ref，避免 effect 因狀態改變而重跑、誤清計時器）
   const countdownRef = useRef(null);
+  const cancelRef = useRef(()=>{});
 
   useEffect(() => {
     const IDLE_MS = idleMinutes * 60 * 1000;
     const WARN_SEC = 10;
 
+    const cancelWarn = () => {
+      if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+      warnRef.current = false;
+      lastActive.current = Date.now();
+      setShowWarn(false);
+      setCountdown(WARN_SEC);
+    };
+    cancelRef.current = cancelWarn;
+
     const resetIdle = () => {
       lastActive.current = Date.now();
-      if (showWarn) {
-        // 使用者回來動作了，取消這次的重整流程，重新計時
-        setShowWarn(false);
-        if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-        setCountdown(WARN_SEC);
-      }
+      if (warnRef.current) cancelWarn(); // 使用者回來操作 → 取消這次重整
     };
     const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
     events.forEach(ev => window.addEventListener(ev, resetIdle, { passive: true }));
 
     const checkIdle = setInterval(() => {
+      if (warnRef.current) return;
       const idleFor = Date.now() - lastActive.current;
-      if (idleFor >= IDLE_MS && !showWarn) {
-        // 若使用者正在填表單還沒送出，暫緩這次觸發，等表單清空後才會重新累積閒置時間
-        if (isTypingFn && isTypingFn()) { lastActive.current = Date.now() - IDLE_MS + 60000; return; } // 1分鐘後再檢查一次
+      if (idleFor >= IDLE_MS) {
+        // 有未送出的內容 → 暫緩，1 分鐘後再檢查
+        if (isTypingFn && isTypingFn()) { lastActive.current = Date.now() - IDLE_MS + 60000; return; }
+        warnRef.current = true;
         setShowWarn(true);
-        setCountdown(WARN_SEC);
+        let left = WARN_SEC;
+        setCountdown(left);
         countdownRef.current = setInterval(() => {
-          setCountdown(c => {
-            if (c <= 1) {
-              clearInterval(countdownRef.current);
-              window.location.reload();
-              return 0;
-            }
-            return c - 1;
-          });
+          left -= 1;
+          setCountdown(left);
+          if (left <= 0) {
+            clearInterval(countdownRef.current); countdownRef.current = null;
+            window.location.reload();
+          }
         }, 1000);
       }
-    }, 30000); // 每30秒檢查一次是否已閒置
+    }, 30000);
 
     return () => {
       events.forEach(ev => window.removeEventListener(ev, resetIdle));
       clearInterval(checkIdle);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
     };
-  }, [idleMinutes, showWarn]);
+  }, [idleMinutes]);
 
   if (!showWarn) return null;
   return h("div", { style:{ position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", zIndex:9999,
       background:"#1f2937", color:"#fff", borderRadius:12, padding:"14px 20px", boxShadow:"0 8px 24px rgba(0,0,0,0.3)",
       display:"flex", alignItems:"center", gap:14, fontSize:15, flexWrap:"wrap", maxWidth:"92vw" } },
     h("span", null, `⏰ 閒置過久，${countdown} 秒後自動重新整理（避免資料過舊）`),
-    h("button", { onClick:()=>{
-        setShowWarn(false);
-        if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-        lastActive.current = Date.now();
-      }, style:{ border:"none", background:"#fff", color:"#1f2937", borderRadius:8, padding:"6px 14px", fontWeight:700, cursor:"pointer" } },
+    h("button", { onClick:()=>cancelRef.current(), style:{ border:"none", background:"#fff", color:"#1f2937", borderRadius:8, padding:"6px 14px", fontWeight:700, cursor:"pointer" } },
       "我還在，取消"),
   );
 }
