@@ -20,7 +20,7 @@
 
 <script type="module">
 import {
-  h, useState, useEffect, useRef, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog, IdleReloader,
+  h, useState, useEffect, useRef, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog, IdleReloader, motoPatchWithDeletes,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword,
   tk, EMPTY, fmtPhone, toHalfWidth, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
   mondayOf, weekLabel, upcomingMondays
@@ -181,6 +181,7 @@ function AddForm({ route, prepMode, motoMode, labelOf, canAddSide, onAdd, isOver
 function App() {
   const [ok,setOk] = useState(false);
   const [loaded,setLoaded] = useState(false);
+  const [loadErr,setLoadErr] = useState(false);
   const [operator,setOperator] = useState(localStorage.getItem("op_name")||"");
   const [page,setPage] = useState("run"); // run / prep / moto
   const [selDay,setSelDay] = useState(new Date().getDay());
@@ -217,11 +218,12 @@ function App() {
         setWaitR(v.waitR||{});
       }
       setLoaded(true);
-    },(e)=>{ console.error(e); setLoaded(true); });
+    },(e)=>{ console.error(e); setLoadErr(true); });
     return ()=>unsub();
   },[ok]);
 
   if(!ok) return h(Gate,{onPass:()=>setOk(true)});
+  if(loadErr) return h("div",{style:{display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",height:"100vh",gap:12,fontSize:17,padding:20,textAlign:"center"}},h("div",null,"❗ 讀取資料失敗，為避免覆蓋資料，已暫停操作。"),h("button",{onClick:()=>location.reload(),style:{padding:"8px 20px",fontSize:16}},"重新整理"));
   if(!loaded) return h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}},h("div",{className:"spin"}));
 
   const who = ()=> operator || "";
@@ -365,7 +367,7 @@ function App() {
   const mStore = ()=> motoW[shownWeek]||{};
   function mSetStore(next){
     const nw = { ...motoW, [shownWeek]:next };
-    setMotoW(nw); persist({motoW:nw});
+    setMotoW(nw); persist({motoW: motoPatchWithDeletes(motoW, nw)});
   }
   function addMotoP(k,f){
     if(!requireOp()) return false;
