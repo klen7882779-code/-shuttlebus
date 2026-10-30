@@ -1555,6 +1555,7 @@ function LogPage() {
   const [items,setItems]=useState(null);
   const [staff,setStaff]=useState([]);
   const [main,setMain]=useState(null); // 保留 main 其餘欄位以免覆寫
+  const [mainErr,setMainErr]=useState(false);
   const [newName,setNewName]=useState("");
   const [backups,setBackups]=useState(null);
   const [restoring,setRestoring]=useState(false);
@@ -1567,37 +1568,37 @@ function LogPage() {
     },(e)=>{console.error(e);setItems([]);});
     const u2=onSnapshot(DOC,(snap)=>{
       const v=snap.data()||{};
-      setMain(v); setStaff(v.staff||[]);
-    },(e)=>{console.error(e);});
+      setMain(v); setStaff(v.staff||[]); setMainErr(false);
+    },(e)=>{console.error(e);setMainErr(true);});
     const u3=listBackups(setBackups);
     return ()=>{u1();u2();u3();};
   },[ok]);
 
+  // 讀取完成前（或讀取失敗）一律不寫入，避免用預設值覆蓋期數／開訓日／封存
+  function mainReady(){
+    if(main===null){ alert(mainErr ? "資料讀取失敗，為避免覆蓋資料，已暫停此操作。請重新整理後再試。" : "資料尚未讀取完成，請稍候幾秒再試。"); return false; }
+    return true;
+  }
+  // 只更新 staff 欄位（merge 不影響其他欄位）；firestore 規則看的是合併後的整份文件，白名單與 updatedAt 條件仍成立
   async function saveStaff(list){
-    const base = main || {};
-    const num = (v, d)=> typeof v==="number" ? v : d;
-    // 只寫白名單欄位，避免 main 混入非白名單欄位導致寫入被規則擋下
-    await setDoc(DOC, {
-      data: base.data||{}, prep: base.prep||{}, motoW: base.motoW||{},
-      numA: num(base.numA,459), numB: num(base.numB,458),
-      prepNumA: num(base.prepNumA,460), prepNumB: num(base.prepNumB,459), prepDateA: base.prepDateA||"", prepDateB: base.prepDateB||"", numDateA: base.numDateA||"", numDateB: base.numDateB||"", waitR: base.waitR||{},
-      archive: base.archive||[], staff: list, summer: !!base.summer,
-      updatedAt: Date.now(),
-    }, { merge: true });
+    await setDoc(DOC, { staff: list, updatedAt: Date.now() }, { merge: true });
   }
   function addStaff(){
     const n=newName.trim();
     if(!n || staff.includes(n)) { setNewName(""); return; }
-    const list=[...staff,n]; setStaff(list); saveStaff(list); setNewName("");
+    if(!mainReady()) return;
+    const list=[...staff,n]; setStaff(list); saveStaff(list).catch(e=>{console.error(e);alert("儲存失敗，請檢查網路後重新整理再試。");}); setNewName("");
   }
   function delStaff(n){
-    const list=staff.filter(x=>x!==n); setStaff(list); saveStaff(list);
+    if(!mainReady()) return;
+    const list=staff.filter(x=>x!==n); setStaff(list); saveStaff(list).catch(e=>{console.error(e);alert("儲存失敗，請檢查網路後重新整理再試。");});
   }
 
   // 還原：用選定的備份快照，整包覆蓋 data/prep/motoW/archive/staff
   // （梯次期數 numA/numB/prepNumA/prepNumB 與暑期設定 summer 不受影響；開訓日隨快照還原，舊備份無紀錄則沿用現況）
   async function restoreBackup(b){
     const when = fmt(b.t);
+    if(!mainReady()) return;
     if(!confirm(`確定要還原到這個備份點嗎？\n\n【${b.trigger}】\n備份時間：${when}\n操作者：${b.who||"—"}\n\n這會整包覆蓋：營運表、預備表、機車各週名單、封存名單、員工名單、預備與營運開訓日。\n（不影響梯次期數與暑期開關；若是較舊的備份沒有開訓日紀錄，開訓日會維持現在的值不動）\n\n還原前系統會先自動把「目前」的狀態也存一份備份，萬一還原錯了可以再還原回來。`)) return;
     setRestoring(true);
     try{
