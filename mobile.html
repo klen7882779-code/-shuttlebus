@@ -22,7 +22,7 @@
 import {
   h, useState, useEffect, useRef, createRoot, DOC, onSnapshot, setDoc, getDoc, writeLog, IdleReloader, motoPatchWithDeletes,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME, hasMotoKeyword,
-  tk, EMPTY, fmtPhone, toHalfWidth, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_CAP, motoKey,
+  tk, EMPTY, fmtPhone, toHalfWidth, buildGrid, MOTO_SLOTS, MOTO_DAYS, MOTO_ALL_DAYS, motoSlotsOfDay, isMotoDay, MOTO_CAP, motoKey,
   mondayOf, weekLabel, upcomingMondays
 } from "./app-core.js";
 
@@ -446,16 +446,15 @@ function App() {
   let body;
   if(page==="moto"){
     const store = mStore();
-    const days = MOTO_DAYS;
-    const mDay = days.includes(selDay)?selDay:days[0];
+    const mDay = isMotoDay(selDay)?selDay:MOTO_ALL_DAYS[0];
     body = h("div",null,
       h("div",{style:{display:"flex",gap:6,overflowX:"auto",padding:"0 2px 10px"}},
         weeks.map(wk=>h("button",{key:wk,onClick:()=>setMWeek(wk),style:pill(wk===shownWeek,"#7c3aed")},
           weekLabel(wk)+(wk===curMonday?" 本週":""))),
       ),
-      !days.includes(selDay)
-        ? h("div",{style:{...card,padding:20,textAlign:"center",color:"#94a3b8",fontSize:15}},"週"+DAY_NAME[selDay]+" 機車班休息（機車班：週二～週五）")
-        : MOTO_SLOTS.map(sl=>{
+      !isMotoDay(selDay)
+        ? h("div",{style:{...card,padding:20,textAlign:"center",color:"#94a3b8",fontSize:15}},"週"+DAY_NAME[selDay]+" 機車班休息（機車班：週二～週日）")
+        : motoSlotsOfDay(mDay).map(sl=>{
             const key = motoKey(mDay,sl.time);
             const list = (store[key]||{L:[]}).L;
             const over = list.length>MOTO_CAP;
