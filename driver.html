@@ -20,7 +20,7 @@
 import {
   h, useState, useEffect, useMemo, createRoot, DOC, onSnapshot,
   SEAT_CAP, ROUTES, ROUTE_STOPS, SIDE_COLORS, WEEKDAYS, WEEKENDS, DAY_NAME,
-  tk, EMPTY, mondayOf, weekLabel, buildGrid, buildMotoGrid, MOTO_DAYS, MOTO_CAP, motoKey, dot, tabGroup, tabBtn
+  tk, EMPTY, mondayOf, weekLabel, buildGrid, motoSlotsOfDay, isMotoDay, MOTO_CAP, motoKey, dot, tabGroup, tabBtn
 } from "./app-core.js";
 
 function todayTab(){ const d=new Date().getDay(); return (d===0||d===6)?"weekend":"weekday"; }
@@ -180,14 +180,9 @@ function Driver() {
 
   // 機車班一天的區塊（「機車班」與「全部」共用）；該天無機車時段則回傳 null
   function renderMoto(day){
-    if(!MOTO_DAYS.includes(day)) return null;
+    if(!isMotoDay(day)) return null;
     const isToday=day===todayDay;
-    const buildMoto=buildMotoGrid();
-    const rows=buildMoto.map(row=>{
-      const dd=row.days.find(x=>x.day===day);
-      if(!dd) return null;
-      return { time:row.slot.time, label:row.slot.label };
-    }).filter(Boolean);
+    const rows=motoSlotsOfDay(day).map(sl=>({ time:sl.time, label:sl.label }));
     if(rows.length===0) return null;
     return h("div",{key:"moto"+day,style:{border:isToday?"2px solid #7c3aed":"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",background:"#fff"}},
       h("div",{style:{padding:"10px 14px",background:isToday?"#f5f3ff":"#f8fafc",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",gap:8}},
