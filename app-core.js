@@ -223,6 +223,29 @@ export function buildMotoGrid(){
     days: MOTO_DAYS.map(day => ({ day, time: slot.time })),
   }));
 }
+
+// ── 機車班假日班（週六、週日各一梯早上 08:00；每梯上限同 MOTO_CAP）──
+// 新增的 key 為 moto_6_08:00、moto_0_08:00，與平日 moto_2…moto_5 不重疊，不影響既有資料
+export const MOTO_WEEKEND_DAYS = [6,0];
+export const MOTO_ALL_DAYS = [2,3,4,5,6,0]; // 機車班營運日（週一停接駁）
+export const MOTO_WEEKEND_SLOTS = {
+  6: [{ time:"08:00", back:"12:30", label:"早上" }],
+  0: [{ time:"08:00", back:"12:30", label:"早上" }],
+};
+// 某一天的機車班梯次（平日用 MOTO_SLOTS，假日用 MOTO_WEEKEND_SLOTS；週一與未知日回傳空陣列）
+export const motoSlotsOfDay = (day)=> MOTO_WEEKEND_SLOTS[day] || (MOTO_DAYS.includes(day) ? MOTO_SLOTS : []);
+export const isMotoDay = (day)=> motoSlotsOfDay(day).length > 0;
+// 該天是否有這個時間的梯次
+export const motoHasSlot = (day,time)=> motoSlotsOfDay(day).some(s=>s.time===time);
+// 假日表格：列＝時間，欄＝週六/週日；該天沒有這個時間的梯次時 time 為 null（畫面顯示空格）
+export function buildMotoWeekendGrid(){
+  // 列＝假日各天梯次時間的聯集（依時間排序），之後若某天加梯次，表格會自動多一列
+  const times = [...new Set(MOTO_WEEKEND_DAYS.flatMap(d => (MOTO_WEEKEND_SLOTS[d]||[]).map(s => s.time)))].sort();
+  return times.map(time => ({
+    slot: { time, label: (MOTO_WEEKEND_SLOTS[MOTO_WEEKEND_DAYS.find(d=>motoHasSlot(d,time))].find(s=>s.time===time)||{}).label || "" },
+    days: MOTO_WEEKEND_DAYS.map(day => ({ day, time: motoHasSlot(day,time) ? time : null })),
+  }));
+}
 export function NameList({ c, route, readOnly, removeP, editP, moveP, cKey, hideR, onCopyPerson }) {
   const stops = ROUTE_STOPS[route.id];
   let i = 0;
